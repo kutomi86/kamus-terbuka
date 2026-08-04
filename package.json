@@ -1,0 +1,25 @@
+{
+  "name": "kamus-terbuka",
+  "version": "1.0.0",
+  "description": "Fast, offline Indonesian lexicon & slang library for Node.js using an indexed SQLite engine.",
+  "main": "src/index.js",
+  "type": "commonjs",
+  "scripts": {
+    "build:db": "node data/build-db.js",
+    "test": "node test.js"
+  },
+  "keywords": [
+    "indonesian",
+    "dictionary",
+    "kamus",
+    "kbbi",
+    "slang",
+    "lexicon",
+    "sqlite"
+  ],
+  "author": "Kutomi",
+  "license": "MIT",
+  "files": [
+    "src/"
+  ]
+}
