@@ -15,39 +15,37 @@ const OpenAI = require('openai');
  * requirement when response_format: { type: "json_object" } is used.
  */
 const SYSTEM_PROMPT = `
-You are an expert lexicographer processing entries for the KBBI (Kamus Besar Bahasa Indonesia) database.
-Your main focus is accurately determining entry type and standardizing language origin tags. 
-Additionally, you must infer missing grammar or domain tags from the definition when confident.
-Output the results in a valid JSON format.
+You are a proactive expert lexicographer for KBBI (Kamus Besar Bahasa Indonesia). 
+Your goal is to enrich the database by actively identifying patterns. 
+IMPORTANT: Use FULL NAMES for all tags. Do not use shorthands or abbreviations (e.g., use "Matematika" instead of "Mat", "Verba" instead of "v").
 
-Rules:
-1. "jenis_entri" (PRIMARY FOCUS):
-   - "kata": A single root or affixed word.
-   - "frasa": A multi-word phrase without idiomatic/proverb meaning.
-   - "peribahasa": Idioms, proverbs, aphorisms, or traditional expressions.
-   - "lainnya": Abbreviations, symbols, affixes, or any entry that does not clearly fit the above options. MUST NOT be null or empty.
+CORE INSTRUCTIONS:
+1. "jenis_entri" (Mandatory):
+   - "kata": Single root or affixed word.
+   - "frasa": Multi-word phrase (non-idiomatic).
+   - "peribahasa": Idioms, proverbs, metaphors, or aphorisms.
+   - "lainnya": Symbols, abbreviations, or affixes.
 
-2. "tags_bahasa" (PRIMARY FOCUS):
-   - Normalize messy, 2-letter, or 3-letter language codes into full, proper Indonesian names.
-   - Examples: "ing"/"en"/"eng" -> "Inggris", "fr"/"fra" -> "Fransis", "jv"/"jav" -> "Jawa", "nl"/"dut" -> "Belanda", "ar"/"ara" -> "Arab", "sd" -> "Sunda".
-   - If missing, unidentifiable, or standard Indonesian without loanword origin, return null.
+2. "tags_bahasa" (Proactive Search - Full Names):
+   - Identify loanword origins and return the full Indonesian name of the language.
+   - Examples: "Inggris" (not "ing"), "Belanda" (not "nl"), "Arab" (not "ar"), "Sanskerta" (not "skt"), "Jawa", "Sunda", "Minangkabau".
 
-3. "tags_kelas" (SECONDARY ENRICHMENT):
-   - If missing or null, infer primary word class from definition ("makna").
-   - Standard KBBI codes: "n" (Nomina), "v" (Verba), "a" (Adjektiva), "adv" (Adverbia), "p" (Pronomina/Preposisi/Partikel).
-   - Return null if uncertain or peribahasa.
+3. "tags_kelas" (Active Inference - Full Names):
+   - Analyze the "makna" (definition) to determine the word class.
+   - Use: "Nomina" (noun), "Verba" (verb), "Adjektiva" (adjective), "Adverbia" (adverb), "Pronomina" (pronoun), "Preposisi" (preposition), "Konjungsi" (conjunction), "Interjeksi" (interjection).
 
-4. "tags_bidang" (SECONDARY ENRICHMENT):
-   - If missing or null, check if definition clearly belongs to a specialized field (e.g., "Huk", "Ked", "Kom", "Mat", "Bio").
-   - Return null if general everyday vocabulary.
+4. "tags_bidang" (Domain Mapping - Full Names):
+   - Identify specialized fields. 
+   - Examples: "Matematika", "Hukum", "Kedokteran", "Komputer", "Biologi", "Linguistik", "Ekonomi", "Fisika".
 
-5. "tags_ragam":
-   - Standard register codes (e.g., "cak" for casual, "kas" for coarse, "hor" for formal/honorific). Return null if standard.
+5. "tags_ragam" (Register/Usage - Full Names):
+   - Identify the tone or context of use.
+   - Use: "Cakapan" (informal/casual), "Kasar" (vulgar/coarse), "Hormat" (formal/polite), "Sastra" (literary), "Klasik" (archaic), "Arkais" (no longer in common use).
 
-6. Critical Requirement:
-   - Always preserve the exact integer "id" provided for each entry.
-   - RESPOND ONLY WITH VALID JSON.
-   - Use the following structure: {"entries": [...array of objects...]}
+CONSTRAINTS:
+- If a tag is truly not applicable or cannot be inferred, return null.
+- Preserve the exact integer "id" provided.
+- RESPOND ONLY WITH VALID JSON: {"entries": [...]}
 `;
 
 // Schema definition for Gemini native responseSchema
@@ -62,7 +60,11 @@ const GEMINI_RESPONSE_SCHEMA = {
         type: 'object',
         properties: {
           id: { type: 'integer' },
-          jenis_entri: { type: 'string', enum: ['kata', 'frasa', 'peribahasa', 'lainnya'] },
+          jenis_entri: { 
+            type: 'string', 
+            enum: ['kata', 'frasa', 'peribahasa', 'lainnya'],
+            nullable: false // Add this to be explicit
+          },
           tags_bahasa: { type: 'string', nullable: true },
           tags_kelas: { type: 'string', nullable: true },
           tags_bidang: { type: 'string', nullable: true },
@@ -239,7 +241,7 @@ async function processBatchWithAI(rows) {
     const provider = providers[currentProviderIndex];
 
     try {
-      console.log(`🤖 Requesting batch processing via [${provider.name}] (${provider.model || provider.modelName})...`);
+      console.log(`\n🤖 Requesting batch processing via [${provider.name}] (${provider.model || provider.modelName})...`);
       const results = await callProvider(provider, rows);
       
       // Basic validation to ensure the AI didn't return an empty or malformed set

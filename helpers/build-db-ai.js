@@ -1,24 +1,14 @@
+/**
+ * build-db-ai.js - Part 1: Setup & Transaction Logic
+ */
 require('dotenv').config();
 const path = require('path');
 const Database = require('better-sqlite3');
 const { processBatchWithAI } = require('./ai-provider');
 
-// Default target path matching project structure: src/database/kamus-terbuka.db
 const DEFAULT_DB_PATH = path.join(__dirname, '..', 'src', 'database', 'kamus-terbuka.db');
-
-/**
- * Helper to pause execution for a given duration in milliseconds.
- */
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-/**
- * Main batch runner process.
- * 
- * @param {string} dbPath - Path to SQLite database file
- * @param {Object} options - Configuration options
- * @param {number} options.batchSize - Number of rows per AI call (default: 20)
- * @param {number} options.limit - Max total rows to process in this run (0 for unlimited)
- */
 async function runAiPipeline(dbPath = DEFAULT_DB_PATH, options = {}) {
   const batchSize = options.batchSize || 20;
   const maxLimit = options.limit || 0;
@@ -27,18 +17,10 @@ async function runAiPipeline(dbPath = DEFAULT_DB_PATH, options = {}) {
   const db = new Database(dbPath);
   db.pragma('journal_mode = WAL');
 
-  // 1. Safeguard: Ensure all target enrichment columns exist on the table
+  // 1. Column Safeguard
   const columns = db.prepare("PRAGMA table_info(entries)").all();
   const columnNames = columns.map((c) => c.name);
-
-  const requiredColumns = [
-    'jenis_entri',
-    'tags_bahasa',
-    'tags_kelas',
-    'tags_bidang',
-    'tags_ragam',
-    'ai_processed'
-  ];
+  const requiredColumns = ['jenis_entri', 'tags_bahasa', 'tags_kelas', 'tags_bidang', 'tags_ragam', 'ai_processed'];
 
   for (const col of requiredColumns) {
     if (!columnNames.includes(col)) {
@@ -47,60 +29,82 @@ async function runAiPipeline(dbPath = DEFAULT_DB_PATH, options = {}) {
     }
   }
 
-  // 2. SQL Statements
-  // Fetch unprocessed rows along with fields required for AI lexical context
+  // 2. Prepared Statements
   const fetchStmt = db.prepare(`
-    SELECT id, kata, lema, makna, etimologi, tags_bahasa, tags_kelas, tags_bidang, tags_ragam, peribahasa, gabungan_kata 
+    SELECT id, kata, lema, makna, etimologi, tags_bahasa, tags_kelas, tags_bidang, tags_ragam 
     FROM entries 
     WHERE ai_processed = 0 
+    ORDER BY id ASC
     LIMIT ?
   `);
 
-  // Non-destructive update preserving existing values via COALESCE
   const updateStmt = db.prepare(`
     UPDATE entries 
     SET jenis_entri = @jenis_entri,
-        tags_bahasa = COALESCE(@tags_bahasa, tags_bahasa),
-        tags_kelas = COALESCE(@tags_kelas, tags_kelas),
-        tags_bidang = COALESCE(@tags_bidang, tags_bidang),
-        tags_ragam = COALESCE(@tags_ragam, tags_ragam),
+        tags_bahasa = @tags_bahasa,
+        tags_kelas = @tags_kelas,
+        tags_bidang = @tags_bidang,
+        tags_ragam = @tags_ragam,
         ai_processed = 1
     WHERE id = @id
   `);
 
-  // Atomic batch commit logic
-  const saveTransaction = db.transaction((results) => {
-    // Valid categories check
+  // 3. The Atomic Transaction with Fallback & Differential Stats
+  const saveBatch = db.transaction((aiResults, originalRowsMap) => {
     const VALID_JENIS = new Set(['kata', 'frasa', 'peribahasa', 'lainnya']);
+    const stats = { jenis: 0, bahasa: 0, kelas: 0, bidang: 0, ragam: 0 };
 
-    const saveTransaction = db.transaction((results) => {
-        for (const res of results) {
-            // Default to 'lainnya' if null, undefined, or invalid
-            const jenisEntri = VALID_JENIS.has(res.jenis_entri) ? res.jenis_entri : 'lainnya';
+    for (const res of aiResults) {
+      const original = originalRowsMap.get(res.id);
+      if (!original) continue;
 
-            updateStmt.run({
-                id: res.id,
-                jenis_entri: jenisEntri,
-                tags_bahasa: res.tags_bahasa || null,
-                tags_kelas: res.tags_kelas || null,
-                tags_bidang: res.tags_bidang || null,
-                tags_ragam: res.tags_ragam || null,
-            });
-        }
-    });
+      // Fallback: If jenis_entri is invalid/null, check for single word
+      let finalJenis = res.jenis_entri;
+      if (!VALID_JENIS.has(finalJenis)) {
+        const isSingleWord = original.kata && !original.kata.trim().includes(' ');
+        finalJenis = isSingleWord ? 'kata' : 'lainnya';
+      }
+      stats.jenis++;
+
+      // Stats checking: Only count if AI provided a value that differs from DB original
+      // Note: We use the full name coming from AI vs whatever was in the DB
+      if (res.tags_bahasa && res.tags_bahasa !== original.tags_bahasa) stats.bahasa++;
+      if (res.tags_kelas && res.tags_kelas !== original.tags_kelas) stats.kelas++;
+      if (res.tags_bidang && res.tags_bidang !== original.tags_bidang) stats.bidang++;
+      if (res.tags_ragam && res.tags_ragam !== original.tags_ragam) stats.ragam++;
+
+      updateStmt.run({
+        id: res.id,
+        jenis_entri: finalJenis,
+        tags_bahasa: res.tags_bahasa || original.tags_bahasa,
+        tags_kelas: res.tags_kelas || original.tags_kelas,
+        tags_bidang: res.tags_bidang || original.tags_bidang,
+        tags_ragam: res.tags_ragam || original.tags_ragam,
+      });
+    }
+    return stats;
   });
+
+  // [Execution Loop Logic continues in Part 2]
+
+  /**
+ * build-db-ai.js - Part 2: Execution Loop & Detailed Logging
+ */
 
   let totalProcessed = 0;
   console.log(`🚀 Starting AI Processing Pipeline (Batch size: ${batchSize})`);
 
-  // 3. Execution Loop
+  // 4. Execution Loop
   while (true) {
     if (maxLimit > 0 && totalProcessed >= maxLimit) {
       console.log(`🎯 Reached target limit of ${maxLimit} entries.`);
       break;
     }
 
-    const currentBatchSize = maxLimit > 0 ? Math.min(batchSize, maxLimit - totalProcessed) : batchSize;
+    const currentBatchSize = maxLimit > 0 
+      ? Math.min(batchSize, maxLimit - totalProcessed) 
+      : batchSize;
+      
     const rows = fetchStmt.all(currentBatchSize);
 
     if (rows.length === 0) {
@@ -108,21 +112,43 @@ async function runAiPipeline(dbPath = DEFAULT_DB_PATH, options = {}) {
       break;
     }
 
-    console.log(`📦 Processing batch of ${rows.length} rows (Processed so far: ${totalProcessed})...`);
+    // Capture the range for logging and map data for comparison
+    const originalRowsMap = new Map(rows.map(row => [row.id, row]));
+    const minId = rows[0].id;
+    const maxId = rows[rows.length - 1].id;
 
     try {
+      // Call the AI provider (with rotating logic defined in ai-provider.js)
       const aiResults = await processBatchWithAI(rows);
 
       if (!Array.isArray(aiResults)) {
         throw new Error('AI provider did not return an array of results.');
       }
 
-      saveTransaction(aiResults);
+      // Execute the atomic transaction (from Part 1)
+      const stats = saveBatch(aiResults, originalRowsMap);
+
       totalProcessed += rows.length;
-      console.log(`✔️ Batch saved successfully. Total processed: ${totalProcessed}`);
+
+      // --- DETAILED LOGGING ---
+      console.log(`\n📦 Batch IDs: ${minId} - ${maxId} (Processed this session: ${totalProcessed})`);
+      
+      // Mandatory logging: jenis_entri
+      console.log(`   ✔️ ${stats.jenis}/${rows.length} jenis_entri assigned.`);
+
+      // Conditional differential logging (only if changes were made)
+      const changes = [];
+      if (stats.bahasa > 0) changes.push(`${stats.bahasa} tags_bahasa enriched`);
+      if (stats.kelas > 0) changes.push(`${stats.kelas} tags_kelas inferred`);
+      if (stats.bidang > 0) changes.push(`${stats.bidang} tags_bidang identified`);
+      if (stats.ragam > 0) changes.push(`${stats.ragam} tags_ragam updated`);
+
+      if (changes.length > 0) {
+        console.log(`   ✨ Improvements: ${changes.join(', ')}`);
+      }
 
     } catch (err) {
-      console.error(`❌ Batch failed: ${err.message}`);
+      console.error(`❌ Batch [${minId}-${maxId}] failed: ${err.message}`);
       console.log('⏳ Waiting 10 seconds before retrying current batch...');
       await sleep(10000);
     }
@@ -132,14 +158,19 @@ async function runAiPipeline(dbPath = DEFAULT_DB_PATH, options = {}) {
   return totalProcessed;
 }
 
-module.exports = {
-  runAiPipeline,
-};
-
-// Allow direct CLI execution: node helpers/build-db-ai.js
+/**
+ * 5. CLI Execution & Export
+ */
 if (require.main === module) {
   const customDbPath = process.argv[2] ? path.resolve(process.argv[2]) : DEFAULT_DB_PATH;
   runAiPipeline(customDbPath)
-    .then((count) => console.log(`🎉 Task finished. Processed ${count} total records.`))
-    .catch((err) => console.error('💥 Fatal error:', err));
+    .then((count) => console.log(`\n🎉 Task finished. Processed ${count} total records.`))
+    .catch((err) => {
+      console.error('\n💥 Fatal error:', err);
+      process.exit(1);
+    });
 }
+
+module.exports = {
+  runAiPipeline,
+};
