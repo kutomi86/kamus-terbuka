@@ -1,11 +1,13 @@
 # Environment variables
-sources/.env
 .env
 .env.local
 .env.*.local
 
 # Node modules
 node_modules/
+
+# Datasets
+helpers/datasets/
 
 # OS files
 .DS_Store

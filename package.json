@@ -4,10 +4,7 @@
   "description": "Fast, offline Indonesian lexicon & slang library for Node.js using an indexed SQLite engine.",
   "main": "src/index.js",
   "type": "commonjs",
-  "scripts": {
-    "build:db": "node data/build-db.js",
-    "test": "node test.js"
-  },
+  "scripts": {},
   "keywords": [
     "indonesian",
     "dictionary",
@@ -21,5 +18,9 @@
   "license": "MIT",
   "files": [
     "src/"
-  ]
+  ],
+  "dependencies": {
+    "better-sqlite3": "^13.0.2",
+    "csv-parser": "^3.2.1"
+  }
 }
