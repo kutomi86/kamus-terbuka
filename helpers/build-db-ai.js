@@ -1,3 +1,18 @@
+// --- ADD THIS HELPER AT THE TOP OF build-db-ai.js (outside the function) ---
+/**
+ * Ensures AI output is a flat string or null for SQLite compatibility.
+ * Handles cases where AI might return an Array or an Object.
+ */
+const sanitizeSqlValue = (val) => {
+  if (val === null || val === undefined) return null;
+  if (typeof val === 'string') return val.trim() || null;
+  if (Array.isArray(val)) return val.join(', '); // Convert ["Arab", "Persia"] -> "Arab, Persia"
+  if (typeof val === 'object') return JSON.stringify(val); // Last resort for unexpected objects
+  return String(val);
+};
+
+
+
 /**
  * build-db-ai.js - Part 1: Setup & Transaction Logic
  */
@@ -50,6 +65,7 @@ async function runAiPipeline(dbPath = DEFAULT_DB_PATH, options = {}) {
   `);
 
   // 3. The Atomic Transaction with Fallback & Differential Stats
+  // --- UPDATE THE saveBatch TRANSACTION BLOCK ---
   const saveBatch = db.transaction((aiResults, originalRowsMap) => {
     const VALID_JENIS = new Set(['kata', 'frasa', 'peribahasa', 'lainnya']);
     const stats = { jenis: 0, bahasa: 0, kelas: 0, bidang: 0, ragam: 0 };
@@ -58,7 +74,13 @@ async function runAiPipeline(dbPath = DEFAULT_DB_PATH, options = {}) {
       const original = originalRowsMap.get(res.id);
       if (!original) continue;
 
-      // Fallback: If jenis_entri is invalid/null, check for single word
+      // 1. Sanitize all incoming AI values immediately
+      const cleanBahasa = sanitizeSqlValue(res.tags_bahasa);
+      const cleanKelas = sanitizeSqlValue(res.tags_kelas);
+      const cleanBidang = sanitizeSqlValue(res.tags_bidang);
+      const cleanRagam = sanitizeSqlValue(res.tags_ragam);
+
+      // 2. Fallback Logic for jenis_entri
       let finalJenis = res.jenis_entri;
       if (!VALID_JENIS.has(finalJenis)) {
         const isSingleWord = original.kata && !original.kata.trim().includes(' ');
@@ -66,20 +88,19 @@ async function runAiPipeline(dbPath = DEFAULT_DB_PATH, options = {}) {
       }
       stats.jenis++;
 
-      // Stats checking: Only count if AI provided a value that differs from DB original
-      // Note: We use the full name coming from AI vs whatever was in the DB
-      if (res.tags_bahasa && res.tags_bahasa !== original.tags_bahasa) stats.bahasa++;
-      if (res.tags_kelas && res.tags_kelas !== original.tags_kelas) stats.kelas++;
-      if (res.tags_bidang && res.tags_bidang !== original.tags_bidang) stats.bidang++;
-      if (res.tags_ragam && res.tags_ragam !== original.tags_ragam) stats.ragam++;
+      // 3. Stats checking (Compare sanitized versions)
+      if (cleanBahasa && cleanBahasa !== original.tags_bahasa) stats.bahasa++;
+      if (cleanKelas && cleanKelas !== original.tags_kelas) stats.kelas++;
+      if (cleanBidang && cleanBidang !== original.tags_bidang) stats.bidang++;
+      if (cleanRagam && cleanRagam !== original.tags_ragam) stats.ragam++;
 
       updateStmt.run({
         id: res.id,
         jenis_entri: finalJenis,
-        tags_bahasa: res.tags_bahasa || original.tags_bahasa,
-        tags_kelas: res.tags_kelas || original.tags_kelas,
-        tags_bidang: res.tags_bidang || original.tags_bidang,
-        tags_ragam: res.tags_ragam || original.tags_ragam,
+        tags_bahasa: cleanBahasa || original.tags_bahasa,
+        tags_kelas: cleanKelas || original.tags_kelas,
+        tags_bidang: cleanBidang || original.tags_bidang,
+        tags_ragam: cleanRagam || original.tags_ragam,
       });
     }
     return stats;
