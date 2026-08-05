@@ -6,11 +6,11 @@
 # Node modules
 node_modules/
 
-# Datasets
+# Datasets (huge files that are originated from the credited KBBI dataset, or other sources such as project plans)
 helpers/datasets/kbbi_v6.1.0_full.csv
 helpers/datasets/Project_Roadmap.md
 
-# Databases
+# Databases (temporary files)
 src/database/kamus-terbuka.db-shm
 src/database/kamus-terbuka.db-wal
 

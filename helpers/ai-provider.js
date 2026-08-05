@@ -57,34 +57,47 @@ const GEMINI_RESPONSE_SCHEMA = {
 // ==========================================
 
 const providers = [];
+const PROVIDER_CONFIGS = {
+  GEMINI: { type: 'gemini', model: 'gemini-3.5-flash-lite' },
+  GROQ: { url: 'https://api.groq.com/openai/v1', model: 'llama-3.3-70b-versatile' },
+  CEREBRAS: { url: 'https://api.cerebras.ai/v1', model: 'llama3.3-70b' },
+  SAMBANOVA: { url: 'https://api.sambanova.ai/v1', model: 'Meta-Llama-3.3-70B-Instruct' },
+  MISTRAL: { url: 'https://api.mistral.ai/v1', model: 'mistral-small-latest' },
+  OPENROUTER: { url: 'https://openrouter.ai/api/v1', model: 'meta-llama/llama-3.3-70b-instruct:free' },
+  DEEPSEEK: { url: 'https://api.deepseek.com/v1', model: 'deepseek-chat' },
+};
 
 /**
  * Gemini Registration (Native SDK)
- * We store the API key and model name string to initialize 
- * the model instance fresh during the call.
  */
-if (process.env.API_KEY_GEMINI) {
-  providers.push({
-    name: 'Gemini',
-    type: 'gemini',
-    // Initialize the new SDK client
-    client: new GoogleGenAI ({ apiKey: process.env.API_KEY_GEMINI }),
-    modelName: "gemini-3.5-flash-lite", // Use the name from your listModels output
+Object.keys(process.env)
+  .filter(key => key.startsWith('API_KEY_') && key.includes('GEMINI'))
+  .forEach(envKey => {
+    const apiKey = process.env[envKey];
+    if (!apiKey) return;
+
+    const name = envKey.replace('API_KEY_', '');
+    const formattedName = name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
+
+    providers.push({
+      name: formattedName,
+      type: PROVIDER_CONFIGS.GEMINI.type,
+      client: new GoogleGenAI({ apiKey }),
+      modelName: PROVIDER_CONFIGS.GEMINI.model,
+    });
   });
-}
 
 /**
  * Helper to register OpenAI-compatible clients safely.
  */
-function registerOpenAIProvider(envKey, name, baseURL, model) {
-  if (process.env[envKey]) {
+function registerOpenAIProvider(apiKey, name, baseURL, model) {
+  if (apiKey) {
     providers.push({
       name,
       type: 'openai-compatible',
       client: new OpenAI({ 
-        apiKey: process.env[envKey], 
+        apiKey, 
         baseURL,
-        // Some providers like OpenRouter require these headers
         defaultHeaders: {
           "HTTP-Referer": "https://github.com/kamus-terbuka", 
           "X-Title": "Kamus Terbuka AI Pipeline",
@@ -95,26 +108,43 @@ function registerOpenAIProvider(envKey, name, baseURL, model) {
   }
 }
 
-// Registering providers with specific models from your requirements
-registerOpenAIProvider('API_KEY_GROQ1', 'Groq1', 'https://api.groq.com/openai/v1', 'llama-3.3-70b-versatile');
-registerOpenAIProvider('API_KEY_GROQ2', 'Groq2', 'https://api.groq.com/openai/v1', 'llama-3.3-70b-versatile');
-registerOpenAIProvider('API_KEY_CEREBRAS1', 'Cerebras1', 'https://api.cerebras.ai/v1', 'llama3.3-70b');
-registerOpenAIProvider('API_KEY_CEREBRAS2', 'Cerebras2', 'https://api.cerebras.ai/v1', 'llama3.3-70b');
-registerOpenAIProvider('API_KEY_SAMBANOVA1', 'SambaNova1', 'https://api.sambanova.ai/v1', 'Meta-Llama-3.3-70B-Instruct');
-registerOpenAIProvider('API_KEY_SAMBANOVA2', 'SambaNova2', 'https://api.sambanova.ai/v1', 'Meta-Llama-3.3-70B-Instruct');
-registerOpenAIProvider('API_KEY_MISTRAL1', 'Mistral1', 'https://api.mistral.ai/v1', 'mistral-small-latest');
-registerOpenAIProvider('API_KEY_MISTRAL2', 'Mistral2', 'https://api.mistral.ai/v1', 'mistral-small-latest');
-registerOpenAIProvider('API_KEY_OPENROUTER1', 'OpenRouter1', 'https://openrouter.ai/api/v1', 'meta-llama/llama-3.3-70b-instruct:free');
-registerOpenAIProvider('API_KEY_OPENROUTER2', 'OpenRouter2', 'https://openrouter.ai/api/v1', 'meta-llama/llama-3.3-70b-instruct:free');
-registerOpenAIProvider('API_KEY_DEEPSEEK1', 'DeepSeek1', 'https://api.deepseek.com/v1', 'deepseek-chat');
-registerOpenAIProvider('API_KEY_DEEPSEEK2', 'DeepSeek2', 'https://api.deepseek.com/v1', 'deepseek-chat');
-registerOpenAIProvider('API_KEY_DEEPSEEK3', 'DeepSeek3', 'https://api.deepseek.com/v1', 'deepseek-chat');
+// Registering non-gemini providers
+Object.keys(process.env)
+  .filter(key => key.startsWith('API_KEY_') && !key.includes('GEMINI'))
+  .forEach(envKey => {
+    const apiKey = process.env[envKey];
+    const type = Object.keys(PROVIDER_CONFIGS).find(p => envKey.includes(p));
+
+    if (apiKey && type) {
+      const name = envKey.replace('API_KEY_', '');
+      const formattedName = name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
+      
+      registerOpenAIProvider(
+        apiKey,
+        formattedName,
+        PROVIDER_CONFIGS[type].url,
+        PROVIDER_CONFIGS[type].model
+      );
+    }
+  });
+
+// ---------------------------------------------------------------------------
+// BLOCKER GUARD: Prevents the rest of the script from executing if counts mismatch
+// ---------------------------------------------------------------------------
+const totalExpectedKeys = Object.keys(process.env)
+  .filter(key => key.startsWith('API_KEY_') && process.env[key]).length;
 
 // Ensure at least one provider is available
 if (providers.length === 0) {
   console.error('❌ Error: No API keys detected in .env file!');
   process.exit(1);
 }
+
+if (providers.length !== totalExpectedKeys) {
+  throw new Error(`[BLOCKER] Provider initialization failed! Expected ${totalExpectedKeys} keys from .env, but only registered ${providers.length}. Execution halted.`);
+}
+
+console.log(`Successfully registered all ${providers.length}/${totalExpectedKeys} providers.`);
 
 // Track provider index across batch calls for round-robin rotation
 let currentProviderIndex = 0;
