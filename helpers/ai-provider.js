@@ -3,50 +3,25 @@
  */
 
 require('dotenv').config();
-const { GoogleGenAI  } = require('@google/genai');
+const fs = require('fs');
+const path = require('path');
+const { GoogleGenAI } = require('@google/genai');
 const OpenAI = require('openai');
 
-// ==========================================
-// 1. SHARED SYSTEM PROMPT & JSON INSTRUCTIONS
-// ==========================================
+// Define the path to your prompt file (relative to this helper)
+const PROMPT_PATH = path.join(__dirname, 'datasets', 'system_prompt.txt');
 
-/**
- * Note: The word "JSON" is included explicitly to satisfy Groq's 
- * requirement when response_format: { type: "json_object" } is used.
- */
-const SYSTEM_PROMPT = `
-You are a proactive expert lexicographer for KBBI (Kamus Besar Bahasa Indonesia). 
-Your goal is to enrich the database by actively identifying patterns. 
-IMPORTANT: Use FULL NAMES for all tags. Do not use shorthands or abbreviations (e.g., use "Matematika" instead of "Mat", "Verba" instead of "v").
+let SYSTEM_PROMPT = '';
 
-CORE INSTRUCTIONS:
-1. "jenis_entri" (Mandatory):
-   - "kata": Single root or affixed word.
-   - "frasa": Multi-word phrase (non-idiomatic).
-   - "peribahasa": Idioms, proverbs, metaphors, or aphorisms.
-   - "lainnya": Symbols, abbreviations, or affixes.
-
-2. "tags_bahasa" (Proactive Search - Full Names):
-   - Identify loanword origins and return the full Indonesian name of the language.
-   - Examples: "Inggris" (not "ing"), "Belanda" (not "nl"), "Arab" (not "ar"), "Sanskerta" (not "skt"), "Jawa", "Sunda", "Minangkabau".
-
-3. "tags_kelas" (Active Inference - Full Names):
-   - Analyze the "makna" (definition) to determine the word class.
-   - Use: "Nomina" (noun), "Verba" (verb), "Adjektiva" (adjective), "Adverbia" (adverb), "Pronomina" (pronoun), "Preposisi" (preposition), "Konjungsi" (conjunction), "Interjeksi" (interjection).
-
-4. "tags_bidang" (Domain Mapping - Full Names):
-   - Identify specialized fields. 
-   - Examples: "Matematika", "Hukum", "Kedokteran", "Komputer", "Biologi", "Linguistik", "Ekonomi", "Fisika".
-
-5. "tags_ragam" (Register/Usage - Full Names):
-   - Identify the tone or context of use.
-   - Use: "Cakapan" (informal/casual), "Kasar" (vulgar/coarse), "Hormat" (formal/polite), "Sastra" (literary), "Klasik" (archaic), "Arkais" (no longer in common use).
-
-CONSTRAINTS:
-- If a tag is truly not applicable or cannot be inferred, return null.
-- Preserve the exact integer "id" provided.
-- RESPOND ONLY WITH VALID JSON: {"entries": [...]}
-`;
+try {
+  // Read the system prompt from the external file
+  SYSTEM_PROMPT = fs.readFileSync(PROMPT_PATH, 'utf8').trim();
+  console.log('📄 System prompt loaded successfully from dataset.');
+} catch (err) {
+  console.error(`❌ Critical Error: Could not read system prompt file at ${PROMPT_PATH}`);
+  console.error(err.message);
+  process.exit(1); // Exit if the core instructions are missing
+}
 
 // Schema definition for Gemini native responseSchema
 // We wrap it in an object with an "entries" key to match OpenAI-compatible behavior
@@ -121,12 +96,19 @@ function registerOpenAIProvider(envKey, name, baseURL, model) {
 }
 
 // Registering providers with specific models from your requirements
-registerOpenAIProvider('API_KEY_GROQ', 'Groq', 'https://api.groq.com/openai/v1', 'llama-3.3-70b-versatile');
-registerOpenAIProvider('API_KEY_CEREBRAS', 'Cerebras', 'https://api.cerebras.ai/v1', 'llama3.3-70b');
-registerOpenAIProvider('API_KEY_SAMBANOVA', 'SambaNova', 'https://api.sambanova.ai/v1', 'Meta-Llama-3.3-70B-Instruct');
-registerOpenAIProvider('API_KEY_MISTRAL', 'Mistral', 'https://api.mistral.ai/v1', 'mistral-small-latest');
-registerOpenAIProvider('API_KEY_OPENROUTER', 'OpenRouter', 'https://openrouter.ai/api/v1', 'meta-llama/llama-3.3-70b-instruct:free');
-registerOpenAIProvider('API_KEY_DEEPSEEK', 'DeepSeek', 'https://api.deepseek.com/v1', 'deepseek-chat');
+registerOpenAIProvider('API_KEY_GROQ1', 'Groq1', 'https://api.groq.com/openai/v1', 'llama-3.3-70b-versatile');
+registerOpenAIProvider('API_KEY_GROQ2', 'Groq2', 'https://api.groq.com/openai/v1', 'llama-3.3-70b-versatile');
+registerOpenAIProvider('API_KEY_CEREBRAS1', 'Cerebras1', 'https://api.cerebras.ai/v1', 'llama3.3-70b');
+registerOpenAIProvider('API_KEY_CEREBRAS2', 'Cerebras2', 'https://api.cerebras.ai/v1', 'llama3.3-70b');
+registerOpenAIProvider('API_KEY_SAMBANOVA1', 'SambaNova1', 'https://api.sambanova.ai/v1', 'Meta-Llama-3.3-70B-Instruct');
+registerOpenAIProvider('API_KEY_SAMBANOVA2', 'SambaNova2', 'https://api.sambanova.ai/v1', 'Meta-Llama-3.3-70B-Instruct');
+registerOpenAIProvider('API_KEY_MISTRAL1', 'Mistral1', 'https://api.mistral.ai/v1', 'mistral-small-latest');
+registerOpenAIProvider('API_KEY_MISTRAL2', 'Mistral2', 'https://api.mistral.ai/v1', 'mistral-small-latest');
+registerOpenAIProvider('API_KEY_OPENROUTER1', 'OpenRouter1', 'https://openrouter.ai/api/v1', 'meta-llama/llama-3.3-70b-instruct:free');
+registerOpenAIProvider('API_KEY_OPENROUTER2', 'OpenRouter2', 'https://openrouter.ai/api/v1', 'meta-llama/llama-3.3-70b-instruct:free');
+registerOpenAIProvider('API_KEY_DEEPSEEK1', 'DeepSeek1', 'https://api.deepseek.com/v1', 'deepseek-chat');
+registerOpenAIProvider('API_KEY_DEEPSEEK2', 'DeepSeek2', 'https://api.deepseek.com/v1', 'deepseek-chat');
+registerOpenAIProvider('API_KEY_DEEPSEEK3', 'DeepSeek3', 'https://api.deepseek.com/v1', 'deepseek-chat');
 
 // Ensure at least one provider is available
 if (providers.length === 0) {

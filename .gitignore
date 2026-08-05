@@ -7,7 +7,12 @@
 node_modules/
 
 # Datasets
-helpers/datasets/
+helpers/datasets/kbbi_v6.1.0_full.csv
+helpers/datasets/Project_Roadmap.md
+
+# Databases
+src/database/kamus-terbuka.db-shm
+src/database/kamus-terbuka.db-wal
 
 # OS files
 .DS_Store
