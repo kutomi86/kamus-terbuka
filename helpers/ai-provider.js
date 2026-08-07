@@ -41,7 +41,7 @@ const PROVIDER_CONFIGS = {
   CEREBRAS: { url: 'https://api.cerebras.ai/v1', model: 'llama3.3-70b' },
   SAMBANOVA: { url: 'https://api.sambanova.ai/v1', model: 'Meta-Llama-3.3-70B-Instruct' },
   MISTRAL: { url: 'https://api.mistral.ai/v1', model: 'mistral-small-latest' },
-  OPENROUTER: { url: 'https://openrouter.ai/api/v1', model: 'meta-llama/llama-3.3-70b-instruct:free' },
+  OPENROUTER: { url: 'https://openrouter.ai/api/v1', model: 'inclusionai/ling-3.0-tiny:free' },
   DEEPSEEK: { url: 'https://api.deepseek.com/v1', model: 'deepseek-chat' },
 };
 const FAILURE_STATE_PATH = path.join(__dirname, '.ai-provider-failures.json');

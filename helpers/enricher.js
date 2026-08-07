@@ -22,8 +22,37 @@ const BATCH_SIZE = Number(process.env.ENRICHER_BATCH_SIZE || 15);
 const STALE_THRESHOLD_MS = 180 * 1000;
 const CLAIM_LEASE_MS = Number(process.env.ENRICHER_CLAIM_LEASE_MS || 5 * 60 * 1000);
 const REQUIRED_ENRICHED_FIELDS = ['id', 'kata', 'lema', 'pelafalan', 'makna', 'jenis_entri'];
+const SQLITE_RETRY_DELAY_MS = 2000;
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const SQLITE_RETRYABLE_CODES = new Set(['SQLITE_BUSY', 'SQLITE_BUSY_SNAPSHOT', 'SQLITE_LOCKED']);
+
+function isRetryableSqliteError(err) {
+    if (!err) return false;
+
+    if (SQLITE_RETRYABLE_CODES.has(err.code)) return true;
+
+    return /database is locked|database is busy|SQLITE_BUSY/i.test(err.message || '');
+}
+
+async function retrySqliteOperation(operation, description) {
+    let attempt = 0;
+
+    while (true) {
+        try {
+            return await operation();
+        } catch (err) {
+            if (!isRetryableSqliteError(err)) {
+                throw err;
+            }
+
+            attempt += 1;
+            console.warn(`⚠️ SQLite busy during ${description}; retrying in ${SQLITE_RETRY_DELAY_MS}ms (attempt ${attempt})...`);
+            await sleep(SQLITE_RETRY_DELAY_MS);
+        }
+    }
+}
 
 const sanitizeSqlValue = (val) => {
     if (val === null || val === undefined) return null;
@@ -326,10 +355,10 @@ async function runEnricher(db, dbPath) {
     console.log(`🐝 Enricher [${WORKER_ID}] started on ${dbPath}`);
     console.log(`📦 Batch size: ${BATCH_SIZE}`);
 
-    updateHeartbeat();
+    await retrySqliteOperation(() => updateHeartbeat(), 'worker heartbeat update');
 
     while (!shutdownRequested) {
-        reclaimStaleClaims(db);
+        await retrySqliteOperation(() => reclaimStaleClaims(db), 'stale-claim reclamation');
 
         let batchSuccesses = 0;
         const excludedIds = new Set();
@@ -338,7 +367,10 @@ async function runEnricher(db, dbPath) {
         try {
             while (!shutdownRequested && batchSuccesses < BATCH_SIZE) {
                 const remainingSuccesses = BATCH_SIZE - batchSuccesses;
-                const claimedRows = claimBatch(remainingSuccesses, [...excludedIds]);
+                const claimedRows = await retrySqliteOperation(
+                    () => claimBatch(remainingSuccesses, [...excludedIds]),
+                    'claim transaction'
+                );
 
                 if (claimedRows.length === 0) {
                     break;
@@ -350,7 +382,10 @@ async function runEnricher(db, dbPath) {
                     if (shutdownRequested || batchSuccesses >= BATCH_SIZE) break;
 
                     try {
-                        refreshClaimLease(db, row.id, WORKER_ID);
+                        await retrySqliteOperation(
+                            () => refreshClaimLease(db, row.id, WORKER_ID),
+                            `lease refresh for id=${row.id}`
+                        );
 
                         const results = await processBatchWithAI([row], {
                             promptPath: PROMPT_PATH,
@@ -361,27 +396,33 @@ async function runEnricher(db, dbPath) {
                             requiredFields: REQUIRED_ENRICHED_FIELDS,
                         });
 
-                        const saveInfo = saveEntry(row, aiEntry, WORKER_ID);
+                        const saveInfo = await retrySqliteOperation(
+                            () => saveEntry(row, aiEntry, WORKER_ID),
+                            `save transaction for id=${row.id}`
+                        );
                         if (saveInfo.changes === 0) {
                             console.warn(`   ⚠️ [${WORKER_ID}] Skipped id=${row.id} because it was already completed or reclaimed by another worker.`);
-                            updateHeartbeat();
+                            await retrySqliteOperation(() => updateHeartbeat(), 'worker heartbeat update');
                             continue;
                         }
 
                         processed += 1;
                         batchSuccesses += 1;
-                        updateHeartbeat();
+                        await retrySqliteOperation(() => updateHeartbeat(), 'worker heartbeat update');
 
                         console.log(`   ✅ [${processed}] Enriched id=${row.id} (${row.kata})`);
                     } catch (err) {
                         console.error(`   ❌ [${WORKER_ID}] Failed id=${row.id}: ${err.message}`);
                         excludedIds.add(row.id);
                         try {
-                            db.prepare('UPDATE entries SET enriched = 0, enriched_worker_id = NULL, enriched_claim_expires_at = NULL WHERE id = ? AND enriched = 2 AND enriched_worker_id = ?').run(row.id, WORKER_ID);
+                            await retrySqliteOperation(
+                                () => db.prepare('UPDATE entries SET enriched = 0, enriched_worker_id = NULL, enriched_claim_expires_at = NULL WHERE id = ? AND enriched = 2 AND enriched_worker_id = ?').run(row.id, WORKER_ID),
+                                `release claim for id=${row.id}`
+                            );
                         } catch (releaseErr) {
                             console.warn(`   ⚠️ [${WORKER_ID}] Could not release row ${row.id}: ${releaseErr.message}`);
                         }
-                        updateHeartbeat();
+                        await retrySqliteOperation(() => updateHeartbeat(), 'worker heartbeat update');
                         await sleep(1000);
                     }
                 }
@@ -397,10 +438,10 @@ async function runEnricher(db, dbPath) {
                 console.log(`🏁 [${WORKER_ID}] No more pending rows to enrich.`);
             }
 
-            updateHeartbeat();
+            await retrySqliteOperation(() => updateHeartbeat(), 'worker heartbeat update');
             continueAfterBatch = batchSuccesses > 0 || excludedIds.size > 0;
         } finally {
-            db.pragma('wal_checkpoint(PASSIVE)');
+            await retrySqliteOperation(() => db.pragma('wal_checkpoint(PASSIVE)'), 'WAL checkpoint');
             console.log(`   🧹 [${WORKER_ID}] WAL checkpoint completed after batch.`);
         }
 
