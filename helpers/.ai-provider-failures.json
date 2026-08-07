@@ -1,0 +1,49 @@
+{
+  "providers": {
+    "Cerebras1": {
+      "count": 31,
+      "disabled": false,
+      "lastClassification": "transient"
+    },
+    "Cerebras2": {
+      "count": 31,
+      "disabled": false,
+      "lastClassification": "transient"
+    },
+    "Deepseek1": {
+      "count": 31,
+      "disabled": false,
+      "lastClassification": "transient"
+    },
+    "Deepseek2": {
+      "count": 31,
+      "disabled": false,
+      "lastClassification": "transient"
+    },
+    "Deepseek3": {
+      "count": 31,
+      "disabled": false,
+      "lastClassification": "transient"
+    },
+    "Openrouter1": {
+      "count": 30,
+      "disabled": false,
+      "lastClassification": "transient"
+    },
+    "Openrouter2": {
+      "count": 30,
+      "disabled": false,
+      "lastClassification": "transient"
+    },
+    "Sambanova1": {
+      "count": 10,
+      "disabled": false,
+      "lastClassification": "rate-limit"
+    },
+    "Sambanova2": {
+      "count": 9,
+      "disabled": false,
+      "lastClassification": "rate-limit"
+    }
+  },
+  "cooldownUntil": 0

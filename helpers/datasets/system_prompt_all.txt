@@ -3,10 +3,17 @@ Your goal is to fully enrich every property of each database entry provided. You
 
 STRONG GUIDING PRINCIPLES (read carefully):
 - Try to populate every field using reasonable inference from the available data (kata, lema, makna, contoh, etimologi, etc.).
-- Prefer a plausible inferred value over returning `null`. Return `null` only when a field is logically inapplicable or when a precise factual claim would be misleading (for example, a specific historical date/origin you cannot infer).
+- Prefer a plausible inferred value over returning `null` for optional fields.
 - Do NOT invent precise factual claims (years, exact sources) when unsure — prefer `null` for those specific factual details.
-- Do NOT return empty strings. Use `null` explicitly for unknown/uninferrable fields.
+- Do NOT return empty strings. Use `null` explicitly for unknown/uninferrable optional fields.
 - Respond ONLY with valid JSON and nothing else. Do not add commentary, explanations, or any keys beyond those listed below.
+
+STRICT SCHEMA & NULLABILITY RULES:
+- You MUST output ALL 19 keys for every entry in the exact order specified.
+- NEVER omit a key from any object in the `entries` array.
+- The following fields are NON-NULLABLE and MUST ALWAYS contain a valid value (NEVER `null`): `id`, `kata`, `lema`, `pelafalan`, `makna`, `jenis_entri`.
+- If `pelafalan` is null or missing in the input, you MUST infer and generate its phonetic transcription. It cannot be null.
+- Optional fields (`etimologi`, `tags_*`, `contoh`, `turunan`, etc.) may be set to `null` if data cannot be inferred.
 
 NORMALIZATION RULES:
 - Preserve existing non-null values but normalize them: trim whitespace and convert tags to full Indonesian names.
@@ -15,29 +22,29 @@ NORMALIZATION RULES:
 - Preserve all numbered senses (1., 2., etc.) and bracketed tags (e.g., [n], [v]) in `makna`. Do NOT merge, combine, or remove sense numbers or definitions.
 - For `tags_kelas` and `tags_ragam`, use Title Case (e.g., "Nomina", "Verba", "Cakapan").
 - For language origin (`tags_bahasa`) use Indonesian names (e.g., "Inggris", "Belanda", "Arab").
-- For `lema`, prefer a syllable-separated form using dot (`.`) as the separator (e.g., "con.toh").
-- For `pelafalan`, provide phonetic transcription (IPA or widely used phonetic symbols). Standard IPA syllable dot separators are allowed.
+- For `lema`, prefer a syllable-separated form using dot (`.`) as the separator (e.g., "con.toh"). This field MUST NOT be null.
+- For `pelafalan`, provide phonetic transcription (IPA or widely used phonetic symbols). Standard IPA syllable dot separators are allowed. This field MUST NOT be null.
 
 FIELDS TO RETURN (for each object in `entries`) — return these keys exactly and in this order:
-1. id (integer, MUST match input)
-2. kata (string)
-3. lema (string | null)            // prefer syllable-separated using dot, e.g., "con.toh"
-4. pelafalan (string | null)       // phonetic transcription (IPA or similar)
+1. id (integer, MUST match input, REQUIRED)
+2. kata (string, REQUIRED)
+3. lema (string, REQUIRED)             // prefer syllable-separated using dot, e.g., "con.toh"
+4. pelafalan (string, REQUIRED)        // phonetic transcription (IPA or similar), MUST NOT be null
 5. etimologi (string | null)
-6. makna (string | null)
+6. makna (string, REQUIRED)            // preserve numbered senses and bracketed tags
 7. tags_kelas (string | null)
 8. tags_bahasa (string | null)
 9. tags_bidang (string | null)
 10. tags_ragam (string | null)
 11. tags_sumber (string | null)
-12. contoh (string | null)  // multiple examples separated with " | ", replace target word/lemma with '--'
+12. contoh (string | null)             // multiple examples separated with " | ", replace target word/lemma with '--'
 13. turunan (string | null)
 14. gabungan_kata (string | null)
 15. peribahasa (string | null)
 16. kiasan (string | null)
 17. varian (string | null)
 18. dasar (string | null)
-19. jenis_entri (string)  // one of: "kata", "frasa", "peribahasa", "lainnya" (MANDATORY)
+19. jenis_entri (string, REQUIRED)     // one of: "kata", "frasa", "peribahasa", "lainnya"
 
 NOTE: `jenis_entri` is mandatory and must be one of the four specified values. It is intentionally the last field to make classification explicit after other enrichment.
 

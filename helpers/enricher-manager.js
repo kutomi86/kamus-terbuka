@@ -58,13 +58,14 @@ function startWorker(index, restartFailed, state) {
   });
 
   const prefix = `[worker ${index + 1}/${state.workerCount}]`;
+  const newLiner = (chunk) => chunk.toString().toLowerCase().includes("requesting batch processing") ? `\n` : "";
 
   child.stdout.on('data', (chunk) => {
-    process.stdout.write(`${prefix} ${chunk}`);
+    process.stdout.write(`${newLiner(chunk)}${prefix} ${chunk}`);
   });
 
   child.stderr.on('data', (chunk) => {
-    process.stderr.write(`${prefix} ${chunk}`);
+    process.stderr.write(`${newLiner(chunk)}${prefix} ${chunk}`);
   });
 
   child.on('exit', (code, signal) => {

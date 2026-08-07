@@ -20,6 +20,7 @@ const PROMPT_PATH = path.join(__dirname, 'datasets', 'system_prompt_all.txt');
 const WORKER_ID = uuidv4().slice(0, 8);
 const BATCH_SIZE = Number(process.env.ENRICHER_BATCH_SIZE || 15);
 const STALE_THRESHOLD_MS = 180 * 1000;
+const CLAIM_LEASE_MS = Number(process.env.ENRICHER_CLAIM_LEASE_MS || 5 * 60 * 1000);
 const REQUIRED_ENRICHED_FIELDS = ['id', 'kata', 'lema', 'pelafalan', 'makna', 'jenis_entri'];
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -46,11 +47,15 @@ function ensureSchema(db) {
     `).run();
 
     const columns = db.prepare('PRAGMA table_info(entries)').all().map((column) => column.name);
-    const requiredCols = ['enriched', 'enriched_worker_id'];
+    const requiredCols = ['enriched', 'enriched_worker_id', 'enriched_claim_expires_at'];
 
     for (const column of requiredCols) {
         if (!columns.includes(column)) {
-            const definition = column === 'enriched' ? ' INTEGER DEFAULT 0' : ' TEXT';
+            const definition = column === 'enriched'
+                ? ' INTEGER DEFAULT 0'
+                : column === 'enriched_claim_expires_at'
+                    ? ' INTEGER'
+                    : ' TEXT';
             db.prepare(`ALTER TABLE entries ADD COLUMN ${column}${definition}`).run();
         }
     }
@@ -108,19 +113,32 @@ function selectPreferredValue(originalValue, aiValue) {
 
 function buildClaimReleaseSql(workerIds) {
     const placeholders = workerIds.map(() => '?').join(', ');
-    return `UPDATE entries SET enriched = 0, enriched_worker_id = NULL WHERE enriched = 2 AND enriched_worker_id IN (${placeholders})`;
+    return `UPDATE entries SET enriched = 0, enriched_worker_id = NULL, enriched_claim_expires_at = NULL WHERE enriched = 2 AND enriched_worker_id IN (${placeholders})`;
 }
 
 function makeClaimTransaction(db, workerId) {
     const claimStmt = db.prepare(`
         UPDATE entries
         SET enriched = 2,
-                enriched_worker_id = ?
-        WHERE id = ? AND enriched = 0
+            enriched_worker_id = ?,
+            enriched_claim_expires_at = ?
+        WHERE id = ?
+          AND (
+              enriched = 0
+              OR (
+                  enriched = 2
+                  AND (
+                      enriched_worker_id IS NULL
+                      OR enriched_claim_expires_at IS NULL
+                      OR enriched_claim_expires_at <= ?
+                  )
+              )
+          )
     `);
 
     return db.transaction((limit, excludedIds = []) => {
-        const params = [];
+        const now = Date.now();
+        const params = [now];
         const excludedClause = excludedIds.length > 0
             ? ` AND id NOT IN (${excludedIds.map(() => '?').join(', ')})`
             : '';
@@ -137,14 +155,25 @@ function makeClaimTransaction(db, workerId) {
                          contoh, turunan, gabungan_kata, peribahasa, kiasan, varian, dasar,
                          jenis_entri
             FROM entries
-            WHERE enriched = 0${excludedClause}
+            WHERE (
+                enriched = 0
+                OR (
+                    enriched = 2
+                    AND (
+                        enriched_worker_id IS NULL
+                        OR enriched_claim_expires_at IS NULL
+                        OR enriched_claim_expires_at <= ?
+                    )
+                )
+            )${excludedClause}
             ORDER BY id ASC
             LIMIT ?
         `).all(...params);
 
         const claimedRows = [];
         for (const row of pendingRows) {
-            const info = claimStmt.run(workerId, row.id);
+            const expiresAt = now + CLAIM_LEASE_MS;
+            const info = claimStmt.run(workerId, expiresAt, row.id, now);
             if (info.changes === 1) {
                 claimedRows.push(row);
             }
@@ -176,12 +205,14 @@ function makeSaveTransaction(db) {
                 dasar = @dasar,
                 jenis_entri = @jenis_entri,
                 enriched = 1,
-                enriched_worker_id = NULL
+                enriched_worker_id = NULL,
+                enriched_claim_expires_at = NULL
         WHERE id = @id AND enriched_worker_id = @worker_id
     `);
 
     return db.transaction((row, aiEntry, workerId) => {
         const normalized = aiEntry || {};
+        const now = Date.now();
 
         const payload = {
             id: row.id,
@@ -204,6 +235,7 @@ function makeSaveTransaction(db) {
             varian: selectPreferredValue(row.varian, normalized.varian),
             dasar: selectPreferredValue(row.dasar, normalized.dasar),
             jenis_entri: normalizeJenisEntri(normalized.jenis_entri, row),
+            now,
         };
 
         return updateStmt.run(payload);
@@ -223,16 +255,37 @@ function makeHeartbeat(db) {
     return { updateHeartbeat, removeHeartbeat };
 }
 
+function refreshClaimLease(db, rowId, workerId) {
+    const expiresAt = Date.now() + CLAIM_LEASE_MS;
+    return db.prepare(`
+        UPDATE entries
+        SET enriched_claim_expires_at = ?
+        WHERE id = ? AND enriched = 2 AND enriched_worker_id = ?
+    `).run(expiresAt, rowId, workerId).changes;
+}
+
 function reclaimStaleClaims(db) {
-    const cutoff = Date.now() - STALE_THRESHOLD_MS;
+    const now = Date.now();
+    const cutoff = now - STALE_THRESHOLD_MS;
     const staleWorkers = db.prepare('SELECT worker_id FROM worker_heartbeats WHERE last_heartbeat < ?').all(cutoff);
+    let changes = 0;
 
-    if (staleWorkers.length === 0) return 0;
+    if (staleWorkers.length > 0) {
+        const staleWorkerIds = staleWorkers.map((row) => row.worker_id);
+        const sql = buildClaimReleaseSql(staleWorkerIds);
+        const info = db.prepare(sql).run(...staleWorkerIds);
+        changes += info.changes;
+    }
 
-    const staleWorkerIds = staleWorkers.map((row) => row.worker_id);
-    const sql = buildClaimReleaseSql(staleWorkerIds);
-    const info = db.prepare(sql).run(...staleWorkerIds);
-    return info.changes;
+    const expiredLeaseInfo = db.prepare(`
+        UPDATE entries
+        SET enriched = 0,
+            enriched_worker_id = NULL,
+            enriched_claim_expires_at = NULL
+        WHERE enriched = 2 AND enriched_claim_expires_at IS NOT NULL AND enriched_claim_expires_at <= ?
+    `).run(now);
+
+    return changes + expiredLeaseInfo.changes;
 }
 
 async function runEnricher(db, dbPath) {
@@ -251,7 +304,7 @@ async function runEnricher(db, dbPath) {
 
     const finalize = (reason) => {
         try {
-            db.prepare('UPDATE entries SET enriched = 0, enriched_worker_id = NULL WHERE enriched = 2 AND enriched_worker_id = ?').run(WORKER_ID);
+            db.prepare('UPDATE entries SET enriched = 0, enriched_worker_id = NULL, enriched_claim_expires_at = NULL WHERE enriched = 2 AND enriched_worker_id = ?').run(WORKER_ID);
             removeHeartbeat();
             db.pragma('wal_checkpoint(PASSIVE)');
         } catch (err) {
@@ -297,6 +350,8 @@ async function runEnricher(db, dbPath) {
                     if (shutdownRequested || batchSuccesses >= BATCH_SIZE) break;
 
                     try {
+                        refreshClaimLease(db, row.id, WORKER_ID);
+
                         const results = await processBatchWithAI([row], {
                             promptPath: PROMPT_PATH,
                             responseSchema: ENRICHER_RESPONSE_SCHEMA,
@@ -306,7 +361,12 @@ async function runEnricher(db, dbPath) {
                             requiredFields: REQUIRED_ENRICHED_FIELDS,
                         });
 
-                        saveEntry(row, aiEntry, WORKER_ID);
+                        const saveInfo = saveEntry(row, aiEntry, WORKER_ID);
+                        if (saveInfo.changes === 0) {
+                            console.warn(`   ⚠️ [${WORKER_ID}] Skipped id=${row.id} because it was already completed or reclaimed by another worker.`);
+                            updateHeartbeat();
+                            continue;
+                        }
 
                         processed += 1;
                         batchSuccesses += 1;
@@ -317,7 +377,7 @@ async function runEnricher(db, dbPath) {
                         console.error(`   ❌ [${WORKER_ID}] Failed id=${row.id}: ${err.message}`);
                         excludedIds.add(row.id);
                         try {
-                            db.prepare('UPDATE entries SET enriched = 0, enriched_worker_id = NULL WHERE id = ? AND enriched_worker_id = ?').run(row.id, WORKER_ID);
+                            db.prepare('UPDATE entries SET enriched = 0, enriched_worker_id = NULL, enriched_claim_expires_at = NULL WHERE id = ? AND enriched = 2 AND enriched_worker_id = ?').run(row.id, WORKER_ID);
                         } catch (releaseErr) {
                             console.warn(`   ⚠️ [${WORKER_ID}] Could not release row ${row.id}: ${releaseErr.message}`);
                         }
@@ -338,7 +398,7 @@ async function runEnricher(db, dbPath) {
             }
 
             updateHeartbeat();
-            continueAfterBatch = excludedIds.size > 0;
+            continueAfterBatch = batchSuccesses > 0 || excludedIds.size > 0;
         } finally {
             db.pragma('wal_checkpoint(PASSIVE)');
             console.log(`   🧹 [${WORKER_ID}] WAL checkpoint completed after batch.`);

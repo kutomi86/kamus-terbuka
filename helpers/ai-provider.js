@@ -44,6 +44,102 @@ const PROVIDER_CONFIGS = {
   OPENROUTER: { url: 'https://openrouter.ai/api/v1', model: 'meta-llama/llama-3.3-70b-instruct:free' },
   DEEPSEEK: { url: 'https://api.deepseek.com/v1', model: 'deepseek-chat' },
 };
+const FAILURE_STATE_PATH = path.join(__dirname, '.ai-provider-failures.json');
+const FAILURE_RETRY_DELAY_MS = 3 * 60 * 1000;
+
+function loadFailureState() {
+  try {
+    if (!fs.existsSync(FAILURE_STATE_PATH)) {
+      return { providers: {}, cooldownUntil: 0 };
+    }
+
+    const raw = fs.readFileSync(FAILURE_STATE_PATH, 'utf8');
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === 'object') {
+      return {
+        providers: parsed.providers && typeof parsed.providers === 'object' ? parsed.providers : {},
+        cooldownUntil: Number(parsed.cooldownUntil) || 0,
+      };
+    }
+  } catch (err) {
+    console.warn(`⚠️ Unable to read provider failure state: ${err.message}`);
+  }
+
+  return { providers: {}, cooldownUntil: 0 };
+}
+
+function saveFailureState(state) {
+  try {
+    fs.writeFileSync(FAILURE_STATE_PATH, JSON.stringify(state, null, 2));
+  } catch (err) {
+    console.warn(`⚠️ Unable to write provider failure state: ${err.message}`);
+  }
+}
+
+function getProviderFailureInfo(providerName, state = loadFailureState()) {
+  const entry = state.providers[providerName] || {};
+  return {
+    count: Number(entry.count) || 0,
+    disabled: Boolean(entry.disabled),
+    lastClassification: entry.lastClassification || null,
+  };
+}
+
+function classifyProviderFailure(err) {
+  const rawMessage = err && err.message ? err.message : String(err || '');
+  const message = rawMessage.toLowerCase();
+
+  if (message.includes('missing required field') || message.includes('missing required') || message.includes('pelafalan')) {
+    return 'missing-field';
+  }
+
+  if (message.includes('429') || message.includes('rate limit') || message.includes('too many requests') || message.includes('quota') || message.includes('overloaded')) {
+    return 'rate-limit';
+  }
+
+  if (message.includes('socket') || message.includes('timeout') || message.includes('econnreset') || message.includes('fetch failed') || message.includes('network')) {
+    return 'transient';
+  }
+
+  return 'transient';
+}
+
+function markProviderFailure(providerName, classification, state = loadFailureState()) {
+  const existing = getProviderFailureInfo(providerName, state);
+  const nextState = {
+    count: existing.count + 1,
+    disabled: existing.disabled,
+    lastClassification: classification,
+  };
+
+  if (classification === 'missing-field' && nextState.count >= 3) {
+    nextState.disabled = true;
+    console.warn(`🛑 Provider [${providerName}] marked unusable after ${nextState.count} missing-field failures.`);
+  } else if (classification === 'rate-limit') {
+    console.warn(`⏳ Provider [${providerName}] hit a rate-limit condition.`);
+  }
+
+  state.providers[providerName] = nextState;
+  saveFailureState(state);
+  return nextState;
+}
+
+function isProviderAvailable(provider, state = loadFailureState()) {
+  const providerState = getProviderFailureInfo(provider.name, state);
+  if (providerState.disabled) {
+    return false;
+  }
+
+  if (state.cooldownUntil && Date.now() < state.cooldownUntil) {
+    return false;
+  }
+
+  return true;
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 /**
  * Gemini Registration (Native SDK)
@@ -247,30 +343,54 @@ async function processBatchWithAI(rows, options = {}) {
   }
 
   let attempts = 0;
+  let cursor = currentProviderIndex;
 
   while (attempts < totalProviders) {
-    const provider = providers[currentProviderIndex];
+    const state = loadFailureState();
+
+    if (state.cooldownUntil && Date.now() < state.cooldownUntil) {
+      const remainingMs = state.cooldownUntil - Date.now();
+      console.log(`⏳ All providers are temporarily unavailable. Sleeping ${Math.ceil(remainingMs / 1000)}s before retrying...`);
+      await sleep(remainingMs);
+      continue;
+    }
+
+    const provider = providers[cursor % totalProviders];
+    cursor = (cursor + 1) % totalProviders;
+
+    if (!isProviderAvailable(provider, state)) {
+      attempts++;
+      continue;
+    }
 
     try {
-      console.log(`\n🤖 Requesting batch processing via [${provider.name}] (${provider.model || provider.modelName})...`);
+      console.log(`🤖 Requesting batch processing via [${provider.name}] (${provider.model || provider.modelName})...`);
       const results = await callProvider(provider, rows, options);
-      
-      // Basic validation to ensure the AI didn't return an empty or malformed set
+
       if (!results || !Array.isArray(results) || results.length === 0) {
         throw new Error('Provider returned an empty or invalid array.');
       }
 
+      currentProviderIndex = cursor % totalProviders;
       return results;
     } catch (err) {
-      // Log the specific error for debugging (e.g., 429 Rate Limit, 400 JSON error)
       console.warn(`⚠️ Provider [${provider.name}] failed: ${err.message}`);
-      
-      // Advance to next provider in the matrix
-      currentProviderIndex = (currentProviderIndex + 1) % totalProviders;
+      const classification = classifyProviderFailure(err);
+      markProviderFailure(provider.name, classification);
+
       attempts++;
 
+      const nextState = loadFailureState();
+      const blockedProviders = providers.filter((candidate) => !isProviderAvailable(candidate, nextState));
+      if (blockedProviders.length === totalProviders) {
+        nextState.cooldownUntil = Date.now() + FAILURE_RETRY_DELAY_MS;
+        saveFailureState(nextState);
+        console.log('⏳ All providers are blocked by failures or rate limits. Sleeping 3 minutes before retrying.');
+        await sleep(FAILURE_RETRY_DELAY_MS);
+      }
+
       if (attempts < totalProviders) {
-        console.log(`🔄 Switching to next provider: [${providers[currentProviderIndex].name}]`);
+        console.log(`🔄 Switching to next provider.`);
       }
     }
   }
@@ -284,6 +404,7 @@ async function processBatchWithAI(rows, options = {}) {
 
 module.exports = {
   processBatchWithAI,
+  classifyProviderFailure,
 };
 
 // Standalone execution test: node helpers/ai-provider.js
