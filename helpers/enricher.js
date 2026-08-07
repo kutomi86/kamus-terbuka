@@ -76,7 +76,7 @@ function ensureSchema(db) {
     `).run();
 
     const columns = db.prepare('PRAGMA table_info(entries)').all().map((column) => column.name);
-    const requiredCols = ['enriched', 'enriched_worker_id', 'enriched_claim_expires_at'];
+    const requiredCols = ['enriched', 'enriched_worker_id', 'enriched_claim_expires_at', 'enriched_at'];
 
     for (const column of requiredCols) {
         if (!columns.includes(column)) {
@@ -84,6 +84,8 @@ function ensureSchema(db) {
                 ? ' INTEGER DEFAULT 0'
                 : column === 'enriched_claim_expires_at'
                     ? ' INTEGER'
+                    : column === 'enriched_at'
+                        ? ' INTEGER'
                     : ' TEXT';
             db.prepare(`ALTER TABLE entries ADD COLUMN ${column}${definition}`).run();
         }
@@ -234,6 +236,7 @@ function makeSaveTransaction(db) {
                 dasar = @dasar,
                 jenis_entri = @jenis_entri,
                 enriched = 1,
+                enriched_at = @enriched_at,
                 enriched_worker_id = NULL,
                 enriched_claim_expires_at = NULL
         WHERE id = @id AND enriched_worker_id = @worker_id
@@ -265,6 +268,7 @@ function makeSaveTransaction(db) {
             dasar: selectPreferredValue(row.dasar, normalized.dasar),
             jenis_entri: normalizeJenisEntri(normalized.jenis_entri, row),
             now,
+            enriched_at: now,
         };
 
         return updateStmt.run(payload);
