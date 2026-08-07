@@ -1,58 +1,69 @@
 {
   "providers": {
     "Cerebras1": {
-      "count": 172,
+      "count": 180,
       "disabled": false,
+      "disabledUntil": 0,
       "lastClassification": "transient"
     },
     "Cerebras2": {
-      "count": 172,
+      "count": 180,
       "disabled": false,
+      "disabledUntil": 0,
       "lastClassification": "transient"
     },
     "Deepseek1": {
-      "count": 172,
+      "count": 180,
       "disabled": false,
+      "disabledUntil": 0,
       "lastClassification": "transient"
     },
     "Deepseek2": {
-      "count": 171,
+      "count": 179,
       "disabled": false,
+      "disabledUntil": 0,
       "lastClassification": "transient"
     },
     "Deepseek3": {
-      "count": 171,
+      "count": 179,
       "disabled": false,
+      "disabledUntil": 0,
       "lastClassification": "transient"
     },
     "Openrouter1": {
-      "count": 165,
+      "count": 169,
       "disabled": false,
+      "disabledUntil": 0,
       "lastClassification": "transient"
     },
     "Openrouter2": {
-      "count": 163,
+      "count": 167,
       "disabled": false,
+      "disabledUntil": 0,
       "lastClassification": "transient"
     },
     "Sambanova1": {
-      "count": 143,
+      "count": 147,
       "disabled": false,
+      "disabledUntil": 0,
       "lastClassification": "rate-limit"
     },
     "Sambanova2": {
-      "count": 143,
+      "count": 147,
       "disabled": false,
+      "disabledUntil": 0,
       "lastClassification": "rate-limit"
     },
     "Groq1": {
-      "count": 128,
+      "count": 136,
       "disabled": false,
+      "disabledUntil": 0,
       "lastClassification": "rate-limit"
     },
     "Groq2": {
-      "count": 122,
+      "count": 130,
       "disabled": false,
+      "disabledUntil": 0,
       "lastClassification": "rate-limit"
     },
     "Mistral5": {

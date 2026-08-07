@@ -46,6 +46,7 @@ const PROVIDER_CONFIGS = {
 };
 const FAILURE_STATE_PATH = path.join(__dirname, '.ai-provider-failures.json');
 const FAILURE_RETRY_DELAY_MS = 3 * 60 * 1000;
+const PROVIDER_DISABLED_RETRY_DELAY_MS = 10 * 60 * 1000;
 
 function loadFailureState() {
   try {
@@ -81,8 +82,33 @@ function getProviderFailureInfo(providerName, state = loadFailureState()) {
   return {
     count: Number(entry.count) || 0,
     disabled: Boolean(entry.disabled),
+    disabledUntil: Number(entry.disabledUntil) || 0,
     lastClassification: entry.lastClassification || null,
   };
+}
+
+function maybeReenableProvider(providerName, state = loadFailureState()) {
+  const providerState = getProviderFailureInfo(providerName, state);
+
+  if (!providerState.disabled) {
+    return providerState;
+  }
+
+  if (!providerState.disabledUntil || Date.now() < providerState.disabledUntil) {
+    return providerState;
+  }
+
+  const reenabledState = {
+    ...providerState,
+    disabled: false,
+    disabledUntil: 0,
+  };
+
+  state.providers[providerName] = reenabledState;
+  saveFailureState(state);
+  console.log(`♻️ Provider [${providerName}] rejoined the pool after cooldown.`);
+
+  return reenabledState;
 }
 
 function classifyProviderFailure(err) {
@@ -109,12 +135,15 @@ function markProviderFailure(providerName, classification, state = loadFailureSt
   const nextState = {
     count: existing.count + 1,
     disabled: existing.disabled,
+    disabledUntil: existing.disabledUntil || 0,
     lastClassification: classification,
   };
 
   if (classification === 'missing-field' && nextState.count >= 3) {
     nextState.disabled = true;
+    nextState.disabledUntil = Date.now() + PROVIDER_DISABLED_RETRY_DELAY_MS;
     console.warn(`🛑 Provider [${providerName}] marked unusable after ${nextState.count} missing-field failures.`);
+    console.warn(`⏳ Provider [${providerName}] will rejoin the pool after 10 minutes.`);
   } else if (classification === 'rate-limit') {
     console.warn(`⏳ Provider [${providerName}] hit a rate-limit condition.`);
   }
@@ -125,7 +154,7 @@ function markProviderFailure(providerName, classification, state = loadFailureSt
 }
 
 function isProviderAvailable(provider, state = loadFailureState()) {
-  const providerState = getProviderFailureInfo(provider.name, state);
+  const providerState = maybeReenableProvider(provider.name, state);
   if (providerState.disabled) {
     return false;
   }
@@ -357,6 +386,8 @@ async function processBatchWithAI(rows, options = {}) {
 
     const provider = providers[cursor % totalProviders];
     cursor = (cursor + 1) % totalProviders;
+
+    maybeReenableProvider(provider.name, state);
 
     if (!isProviderAvailable(provider, state)) {
       attempts++;
