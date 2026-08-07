@@ -260,8 +260,8 @@ async function runAiPipeline(db, dbPath) {
       try {
         const originalRowsMap = new Map(rows.map(r => [r.id, r]));
         
-        // Request AI processing
-        const aiResults = await processBatchWithAI(rows);
+        // Request AI processing (use prompt from helpers/datasets/system_prompt.txt by default)
+        const aiResults = await processBatchWithAI(rows, { promptPath: path.join(__dirname, 'datasets', 'system_prompt.txt') });
         
         // Save results and update stats
         const stats = saveBatch(aiResults, originalRowsMap);

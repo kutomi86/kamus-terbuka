@@ -4,7 +4,13 @@
   "description": "Fast, offline Indonesian lexicon & slang library for Node.js using an indexed SQLite engine.",
   "main": "src/index.js",
   "type": "commonjs",
-  "scripts": {},
+  "scripts": {
+    "build-db": "node helpers/convert-db.js",
+    "build-db-ai": "node helpers/build-db-ai.js",
+    "enricher": "node helpers/enricher.js",
+    "enricher:manager": "node helpers/enricher-manager.js",
+    "entryChecker": "node tests/entryChecker.js"
+  },
   "keywords": [
     "indonesian",
     "dictionary",

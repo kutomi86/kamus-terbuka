@@ -7,50 +7,28 @@ const fs = require('fs');
 const path = require('path');
 const { GoogleGenAI } = require('@google/genai');
 const OpenAI = require('openai');
+const { GEMINI_RESPONSE_SCHEMA } = require('./datasets/response-schemas.js');
 
-// Define the path to your prompt file (relative to this helper)
-const PROMPT_PATH = path.join(__dirname, 'datasets', 'system_prompt.txt');
+// Define the fallback prompt file path (relative to this helper).
+const DEFAULT_PROMPT_PATH = path.join(__dirname, 'datasets', 'system_prompt_all.txt');
 
-let SYSTEM_PROMPT = '';
+let cachedDefaultPrompt = null;
 
-try {
-  // Read the system prompt from the external file
-  SYSTEM_PROMPT = fs.readFileSync(PROMPT_PATH, 'utf8').trim();
-  console.log('📄 System prompt loaded successfully from dataset.');
-} catch (err) {
-  console.error(`❌ Critical Error: Could not read system prompt file at ${PROMPT_PATH}`);
-  console.error(err.message);
-  process.exit(1); // Exit if the core instructions are missing
+function getDefaultSystemPrompt() {
+  if (cachedDefaultPrompt !== null) {
+    return cachedDefaultPrompt;
+  }
+
+  try {
+    cachedDefaultPrompt = fs.readFileSync(DEFAULT_PROMPT_PATH, 'utf8').trim();
+    console.log('📄 System prompt loaded successfully from dataset.');
+  } catch (err) {
+    cachedDefaultPrompt = '';
+    console.warn(`⚠️ Default system prompt unavailable at ${DEFAULT_PROMPT_PATH}: ${err.message}`);
+  }
+
+  return cachedDefaultPrompt;
 }
-
-// Schema definition for Gemini native responseSchema
-// We wrap it in an object with an "entries" key to match OpenAI-compatible behavior
-// Schema structure for the NEW SDK
-const GEMINI_RESPONSE_SCHEMA = {
-  type: 'object',
-  properties: {
-    entries: {
-      type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          id: { type: 'integer' },
-          jenis_entri: { 
-            type: 'string', 
-            enum: ['kata', 'frasa', 'peribahasa', 'lainnya'],
-            nullable: false // Add this to be explicit
-          },
-          tags_bahasa: { type: 'string', nullable: true },
-          tags_kelas: { type: 'string', nullable: true },
-          tags_bidang: { type: 'string', nullable: true },
-          tags_ragam: { type: 'string', nullable: true },
-        },
-        required: ['id', 'jenis_entri'],
-      },
-    }
-  },
-  required: ['entries'],
-};
 
 // ==========================================
 // 2. PROVIDER CONFIGURATION MATRIX
@@ -129,22 +107,22 @@ Object.keys(process.env)
   });
 
 // ---------------------------------------------------------------------------
-// BLOCKER GUARD: Prevents the rest of the script from executing if counts mismatch
+// Provider availability is validated when a batch is actually requested so
+// non-AI entry points can still import this module safely.
 // ---------------------------------------------------------------------------
 const totalExpectedKeys = Object.keys(process.env)
   .filter(key => key.startsWith('API_KEY_') && process.env[key]).length;
 
 // Ensure at least one provider is available
 if (providers.length === 0) {
-  console.error('❌ Error: No API keys detected in .env file!');
-  process.exit(1);
+  console.warn('⚠️ No AI providers were registered at module load time. AI calls will fail until at least one valid API key is configured.');
+} else if (providers.length !== totalExpectedKeys) {
+  console.warn(`[WARN] Provider initialization mismatch: expected ${totalExpectedKeys} keys from .env, but registered ${providers.length}. Ignoring unsupported or unusable API_KEY_* entries.`);
 }
 
-if (providers.length !== totalExpectedKeys) {
-  throw new Error(`[BLOCKER] Provider initialization failed! Expected ${totalExpectedKeys} keys from .env, but only registered ${providers.length}. Execution halted.`);
+if (providers.length > 0) {
+  console.log(`Successfully registered ${providers.length}/${totalExpectedKeys} providers.`);
 }
-
-console.log(`Successfully registered all ${providers.length}/${totalExpectedKeys} providers.`);
 
 // Track provider index across batch calls for round-robin rotation
 let currentProviderIndex = 0;
@@ -171,7 +149,19 @@ function cleanJsonResponse(rawText) {
  * Executes a single AI call against a specific provider configuration.
  * Standardizes the output to always return the array of entries.
  */
-async function callProvider(provider, rows) {
+async function callProvider(provider, rows, options = {}) {
+  // Resolve prompt: options.prompt (string), options.promptPath (file), or fallback to the default dataset prompt.
+  let prompt = typeof options.prompt === 'string' ? options.prompt : '';
+  const promptPath = options.promptPath || DEFAULT_PROMPT_PATH;
+
+  if (!prompt) {
+    try {
+      prompt = fs.readFileSync(promptPath, 'utf8').trim();
+    } catch (e) {
+      prompt = getDefaultSystemPrompt();
+    }
+  }
+
   const userPayload = `Process the following entries and return the JSON object with the "entries" key:\n${JSON.stringify(rows)}`;
 
   // --- GOOGLE GEN AI SDK (Fixed for JS CamelCase) ---
@@ -181,12 +171,12 @@ async function callProvider(provider, rows) {
     const response = await provider.client.models.generateContent({
       model: provider.modelName,
       contents: [
-        { role: 'user', parts: [{ text: SYSTEM_PROMPT + "\n\n" + userPayload }] }
+        { role: 'user', parts: [{ text: prompt + "\n\n" + userPayload }] }
       ],
       config: {
         // Ensure this is inside 'config' or 'generationConfig' depending on exact v2 sub-version
         response_mime_type: 'application/json',
-        response_schema: GEMINI_RESPONSE_SCHEMA,
+        response_schema: options.responseSchema || GEMINI_RESPONSE_SCHEMA,
         temperature: 0.1,
       },
     });
@@ -210,12 +200,15 @@ async function callProvider(provider, rows) {
 
   // --- OPENAI-COMPATIBLE PROVIDERS ---
   if (provider.type === 'openai-compatible') {
+    const messages = [
+      { role: 'system', content: prompt },
+      { role: 'user', content: userPayload },
+    ];
+
     const completion = await provider.client.chat.completions.create({
       model: provider.model,
-      messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
-        { role: 'user', content: userPayload },
-      ],
+      messages,
+      // Keep response_format for backwards compatibility; provider may ignore schema enforcement
       response_format: { type: 'json_object' },
       temperature: 0.1,
     });
@@ -245,8 +238,14 @@ async function callProvider(provider, rows) {
  * The currentProviderIndex is global, so successful providers are "sticky" 
  * for the duration of the process until they hit a rate limit.
  */
-async function processBatchWithAI(rows) {
+// Main function that accepts options: prompt, promptPath, responseSchema
+async function processBatchWithAI(rows, options = {}) {
   const totalProviders = providers.length;
+
+  if (totalProviders === 0) {
+    throw new Error('No AI providers are configured. Set at least one API_KEY_* environment variable before calling processBatchWithAI.');
+  }
+
   let attempts = 0;
 
   while (attempts < totalProviders) {
@@ -254,7 +253,7 @@ async function processBatchWithAI(rows) {
 
     try {
       console.log(`\n🤖 Requesting batch processing via [${provider.name}] (${provider.model || provider.modelName})...`);
-      const results = await callProvider(provider, rows);
+      const results = await callProvider(provider, rows, options);
       
       // Basic validation to ensure the AI didn't return an empty or malformed set
       if (!results || !Array.isArray(results) || results.length === 0) {
