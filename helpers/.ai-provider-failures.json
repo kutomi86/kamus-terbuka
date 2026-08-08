@@ -1,76 +1,76 @@
 {
   "providers": {
-    "Groq1": {
-      "count": 223,
-      "disabled": false,
-      "disabledUntil": 0,
-      "lastClassification": "rate-limit"
-    },
-    "Groq2": {
-      "count": 223,
-      "disabled": false,
-      "disabledUntil": 0,
-      "lastClassification": "rate-limit"
-    },
-    "Cerebras2": {
-      "count": 223,
-      "disabled": false,
-      "disabledUntil": 0,
-      "lastClassification": "transient"
-    },
     "Deepseek1": {
-      "count": 225,
+      "count": 37,
       "disabled": false,
       "disabledUntil": 0,
       "lastClassification": "transient"
+    },
+    "Gemini": {
+      "count": 36,
+      "disabled": false,
+      "disabledUntil": 0,
+      "lastClassification": "rate-limit"
     },
     "Deepseek2": {
-      "count": 224,
+      "count": 37,
+      "disabled": false,
+      "disabledUntil": 0,
+      "lastClassification": "transient"
+    },
+    "Cerebras1": {
+      "count": 36,
+      "disabled": false,
+      "disabledUntil": 0,
+      "lastClassification": "transient"
+    },
+    "Cerebras2": {
+      "count": 36,
       "disabled": false,
       "disabledUntil": 0,
       "lastClassification": "transient"
     },
     "Deepseek3": {
-      "count": 225,
+      "count": 37,
       "disabled": false,
       "disabledUntil": 0,
       "lastClassification": "transient"
     },
+    "Groq1": {
+      "count": 36,
+      "disabled": false,
+      "disabledUntil": 0,
+      "lastClassification": "rate-limit"
+    },
+    "Groq2": {
+      "count": 36,
+      "disabled": false,
+      "disabledUntil": 0,
+      "lastClassification": "rate-limit"
+    },
     "Openrouter1": {
-      "count": 225,
+      "count": 36,
       "disabled": false,
       "disabledUntil": 0,
       "lastClassification": "transient"
     },
     "Openrouter2": {
-      "count": 225,
+      "count": 37,
       "disabled": false,
       "disabledUntil": 0,
       "lastClassification": "transient"
     },
     "Sambanova1": {
-      "count": 225,
+      "count": 37,
       "disabled": false,
       "disabledUntil": 0,
       "lastClassification": "rate-limit"
     },
     "Sambanova2": {
-      "count": 225,
+      "count": 36,
       "disabled": false,
       "disabledUntil": 0,
       "lastClassification": "rate-limit"
-    },
-    "Gemini": {
-      "count": 224,
-      "disabled": false,
-      "disabledUntil": 0,
-      "lastClassification": "rate-limit"
-    },
-    "Cerebras1": {
-      "count": 224,
-      "disabled": false,
-      "disabledUntil": 0,
-      "lastClassification": "transient"
     }
   },
   "cooldownUntil": 0

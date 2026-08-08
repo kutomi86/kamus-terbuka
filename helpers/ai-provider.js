@@ -287,36 +287,37 @@ async function callProvider(provider, rows, options = {}) {
     }
   }
 
-  const userPayload = `Process the following entries and return the JSON object with the "entries" key:\n${JSON.stringify(rows)}`;
+  const useTextResponse = options.responseMode === 'text';
+  const userPayload = options.userPayload || `Process the following entries and return the JSON object with the "entries" key:\n${JSON.stringify(rows)}`;
 
   // --- GOOGLE GEN AI SDK (Fixed for JS CamelCase) ---
   if (provider.type === 'gemini') {
-    // In the JS SDK, methods remain camelCase: generateContent
-    // Alternatively, use interactions.create for the stateful 2026 approach
+    const config = {
+      temperature: 0.1,
+    };
+
+    if (!useTextResponse) {
+      config.response_mime_type = 'application/json';
+      config.response_schema = options.responseSchema || GEMINI_RESPONSE_SCHEMA;
+    }
+
     const response = await provider.client.models.generateContent({
       model: provider.modelName,
       contents: [
         { role: 'user', parts: [{ text: prompt + "\n\n" + userPayload }] }
       ],
-      config: {
-        // Ensure this is inside 'config' or 'generationConfig' depending on exact v2 sub-version
-        response_mime_type: 'application/json',
-        response_schema: options.responseSchema || GEMINI_RESPONSE_SCHEMA,
-        temperature: 0.1,
-      },
+      config,
     });
 
-    /**
-     * Logic check: In the new SDK, 'response.text' is a getter that 
-     * handles the candidate selection for you automatically.
-     */
     let rawText = "";
     try {
-      // Try the helper first
-      rawText = response.text; 
+      rawText = response.text;
     } catch (e) {
-      // Fallback to manual path if getter fails
       rawText = response.candidates[0].content.parts[0].text;
+    }
+
+    if (useTextResponse) {
+      return cleanJsonResponse(rawText);
     }
 
     const parsed = JSON.parse(cleanJsonResponse(rawText));
@@ -333,18 +334,22 @@ async function callProvider(provider, rows, options = {}) {
     const completion = await provider.client.chat.completions.create({
       model: provider.model,
       messages,
-      // Keep response_format for backwards compatibility; provider may ignore schema enforcement
-      response_format: { type: 'json_object' },
+      ...(useTextResponse ? {} : { response_format: { type: 'json_object' } }),
       temperature: 0.1,
     });
 
     const rawContent = completion.choices[0].message.content;
+
+    if (useTextResponse) {
+      return cleanJsonResponse(rawContent);
+    }
+
     const cleanedContent = cleanJsonResponse(rawContent);
     const parsed = JSON.parse(cleanedContent);
 
     if (parsed.entries && Array.isArray(parsed.entries)) return parsed.entries;
     if (Array.isArray(parsed)) return parsed;
-    
+
     const possibleArray = Object.values(parsed).find((val) => Array.isArray(val));
     if (possibleArray) return possibleArray;
 
@@ -357,6 +362,72 @@ async function callProvider(provider, rows, options = {}) {
 /**
  * helpers/ai-provider.js - Part 4: Batch Management & Export
  */
+
+async function processPromptWithAI(prompt, userPayload, options = {}) {
+  const totalProviders = providers.length;
+
+  if (totalProviders === 0) {
+    throw new Error('No AI providers are configured. Set at least one API_KEY_* environment variable before calling processPromptWithAI.');
+  }
+
+  let attempts = 0;
+  let cursor = currentProviderIndex;
+
+  while (attempts < totalProviders) {
+    const state = loadFailureState();
+
+    if (state.cooldownUntil && Date.now() < state.cooldownUntil) {
+      const remainingMs = state.cooldownUntil - Date.now();
+      console.log(`⏳ All providers are temporarily unavailable. Sleeping ${Math.ceil(remainingMs / 1000)}s before retrying...`);
+      await sleep(remainingMs);
+      continue;
+    }
+
+    const provider = providers[cursor % totalProviders];
+    cursor = (cursor + 1) % totalProviders;
+
+    maybeReenableProvider(provider.name, state);
+
+    if (!isProviderAvailable(provider, state)) {
+      attempts++;
+      continue;
+    }
+
+    try {
+      console.log(`🤖 Requesting prompt via [${provider.name}] (${provider.model || provider.modelName})...`);
+      const result = await callProvider(provider, [{ prompt, userPayload }], {
+        ...options,
+        prompt,
+        userPayload,
+        responseMode: 'text',
+      });
+
+      currentProviderIndex = cursor % totalProviders;
+      return result;
+    } catch (err) {
+      console.warn(`⚠️ Provider [${provider.name}] failed: ${err.message}`);
+      const classification = classifyProviderFailure(err);
+      markProviderFailure(provider.name, classification);
+
+      attempts++;
+
+      const nextState = loadFailureState();
+      const blockedProviders = providers.filter((candidate) => !isProviderAvailable(candidate, nextState));
+      if (blockedProviders.length === totalProviders) {
+        nextState.cooldownUntil = Date.now() + FAILURE_RETRY_DELAY_MS;
+        saveFailureState(nextState);
+        console.log('⏳ All providers are blocked by failures or rate limits. Sleeping 3 minutes before retrying.');
+        await sleep(FAILURE_RETRY_DELAY_MS);
+      }
+
+      if (attempts < totalProviders) {
+        console.log(`🔄 Switching to next provider.`);
+      }
+    }
+  }
+
+  throw new Error('❌ All configured AI providers failed for this prompt. Check API balances and network.');
+}
 
 /**
  * Rotates through available providers until a batch is successfully processed.
@@ -435,6 +506,7 @@ async function processBatchWithAI(rows, options = {}) {
 
 module.exports = {
   processBatchWithAI,
+  processPromptWithAI,
   classifyProviderFailure,
 };
 

@@ -7,6 +7,7 @@ const readline = require('readline');
 const fs = require('fs');
 const path = require('path');
 const Database = require('better-sqlite3');
+const { processPromptWithAI } = require('../helpers/ai-provider');
 
 const DB_PATH = path.join(__dirname, '..', 'src', 'database', 'kamus-terbuka.db');
 
@@ -68,13 +69,14 @@ function formatTimestamp(value) {
     year: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
+    second: '2-digit',
     hour12: false,
   }).formatToParts(date);
 
   const partMap = Object.fromEntries(parts.map((part) => [part.type, part.value]));
   const day = Number(partMap.day);
 
-  return `${partMap.weekday}, ${partMap.month} ${day}${getDaySuffix(day)}, ${partMap.year} ${partMap.hour}:${partMap.minute}`;
+  return `${partMap.weekday}, ${partMap.month} ${day}${getDaySuffix(day)}, ${partMap.year} ${partMap.hour}:${partMap.minute}:${partMap.second}`;
 }
 
 function formatPercent(numerator, denominator) {
@@ -162,6 +164,170 @@ function printAnalysis() {
   console.log(`Active claims: ${claimed} rows are currently in-flight.`);
 }
 
+function buildAnalysisContext() {
+  const { summary, recent } = getAnalysisData();
+  return {
+    type: 'analysis',
+    summary: {
+      total: Number(summary?.total || 0),
+      enriched: Number(summary?.enriched || 0),
+      pending: Number(summary?.pending || 0),
+      claimed: Number(summary?.claimed || 0),
+      timestamped: Number(summary?.timestamped || 0),
+      latestEnrichedAt: summary?.latest_enriched_at || null,
+    },
+    recent,
+  };
+}
+
+async function selectEntryFromSearch() {
+  const query = (await prompt('\nEnter search term (kata/lema): ')).trim();
+
+  if (!query) {
+    console.log('⚠️ Search query cannot be empty.');
+    return null;
+  }
+
+  const searchStmt = db.prepare(`
+    SELECT id, kata 
+    FROM entries 
+    WHERE kata LIKE ? OR lema LIKE ? 
+    LIMIT 20
+  `);
+
+  const results = searchStmt.all(`%${query}%`, `%${query}%`);
+
+  if (results.length === 0) {
+    console.log(`\n❌ No entries found matching "${query}".`);
+    return null;
+  }
+
+  console.log(`\nFound ${results.length} result(s):`);
+  results.forEach((row, index) => {
+    console.log(`${index + 1}. ${row.kata} (${row.id})`);
+  });
+
+  const selection = (await prompt('\nEnter item number to view details (or 0 to cancel): ')).trim();
+  const selectedIndex = parseInt(selection, 10) - 1;
+
+  if (selection === '0' || isNaN(selectedIndex)) {
+    return null;
+  }
+
+  if (selectedIndex < 0 || selectedIndex >= results.length) {
+    console.log('⚠️ Invalid selection index.');
+    return null;
+  }
+
+  const selectedId = results[selectedIndex].id;
+  const fetchStmt = db.prepare('SELECT * FROM entries WHERE id = ?');
+  return fetchStmt.get(selectedId);
+}
+
+async function searchFlow() {
+  const fullEntry = await selectEntryFromSearch();
+
+  if (!fullEntry) {
+    return null;
+  }
+
+  console.log('\n==================================');
+  console.log(`📄 Full Entry: ${fullEntry.kata} (ID: ${fullEntry.id})`);
+  console.log('==================================');
+  console.dir(fullEntry, { depth: null, colors: true });
+  return fullEntry;
+}
+
+async function runAskAiQueue(queue) {
+  if (!Array.isArray(queue) || queue.length === 0) {
+    return;
+  }
+
+  console.log(`\n▶ Running AI queue (${queue.length} request${queue.length === 1 ? '' : 's'})...`);
+
+  for (const [index, item] of queue.entries()) {
+    const requestNumber = index + 1;
+    const contextType = item.context?.type || 'none';
+    const systemPrompt = [
+      'You are a helpful assistant for Kamus Terbuka.',
+      'Use the supplied context when it is available to answer the user question.',
+      'If the provided context is insufficient, say so clearly and avoid inventing missing facts.',
+    ].join('\n');
+
+    const userPayload = JSON.stringify({
+      requestNumber,
+      contextType,
+      question: item.prompt,
+      context: item.context?.data || item.context || null,
+    }, null, 2);
+
+    try {
+      console.log(`\n--- AI Request ${requestNumber} (${contextType}) ---`);
+      const response = await processPromptWithAI(systemPrompt, userPayload, {
+        promptPath: null,
+      });
+
+      console.log('\n--- AI Response ---');
+      console.log(response);
+    } catch (err) {
+      console.error(`❌ Failed to process AI request ${requestNumber}: ${err.message}`);
+    }
+  }
+}
+
+async function askAiFlow() {
+  console.log('\n==================================');
+  console.log('   🤖 ASK AI                      ');
+  console.log('==================================');
+  console.log('1. Pair with search result');
+  console.log('2. Pair with analysis');
+  console.log('3. No context');
+  console.log('0. Cancel');
+
+  const contextChoice = (await prompt('\nSelect context option (0-3): ')).trim();
+  let context = null;
+
+  if (contextChoice === '1') {
+    const selectedEntry = await selectEntryFromSearch();
+    if (!selectedEntry) {
+      console.log('❌ Ask AI canceled.');
+      return;
+    }
+
+    context = {
+      type: 'search-result',
+      data: {
+        entry: selectedEntry,
+      },
+    };
+  } else if (contextChoice === '2') {
+    context = {
+      type: 'analysis',
+      data: buildAnalysisContext(),
+    };
+  } else if (contextChoice === '3') {
+    context = {
+      type: 'none',
+      data: null,
+    };
+  } else if (contextChoice === '0') {
+    console.log('❌ Ask AI canceled.');
+    return;
+  } else {
+    console.log('⚠️ Invalid option. Please enter 0, 1, 2, or 3.');
+    return;
+  }
+
+  const promptText = (await prompt('\nEnter your prompt: ')).trim();
+  if (!promptText) {
+    console.log('⚠️ Prompt cannot be empty.');
+    return;
+  }
+
+  const queue = [{ prompt: promptText, context }];
+  await runAskAiQueue(queue);
+}
+
 // Main Menu Loop
 async function mainMenu() {
   console.log('\n==================================');
@@ -169,9 +335,10 @@ async function mainMenu() {
   console.log('==================================');
   console.log('1. Search Entry');
   console.log('2. Analysis');
-  console.log('3. Exit');
+  console.log('3. Ask AI');
+  console.log('4. Exit');
 
-  const choice = (await prompt('\nSelect option (1-3): ')).trim();
+  const choice = (await prompt('\nSelect option (1-4): ')).trim();
 
   if (choice === '1') {
     await searchFlow();
@@ -181,12 +348,16 @@ async function mainMenu() {
     await prompt('\nPress Enter to return to the main menu...');
     await mainMenu();
   } else if (choice === '3') {
+    await askAiFlow();
+    await prompt('\nPress Enter to return to the main menu...');
+    await mainMenu();
+  } else if (choice === '4') {
     console.log('\nExiting program. Goodbye! 👋');
     db.close();
     rl.close();
     process.exit(0);
   } else {
-    console.log('⚠️ Invalid option. Please enter 1, 2, or 3.');
+    console.log('⚠️ Invalid option. Please enter 1, 2, 3, or 4.');
     await mainMenu();
   }
 }
