@@ -12,7 +12,7 @@ const Database = require('better-sqlite3');
 const PROJECT_ROOT = path.join(__dirname, '..');
 const DB_DIR = path.join(PROJECT_ROOT, 'src', 'database');
 const DB_PATH = path.join(DB_DIR, 'kamus-terbuka.db');
-const BUILD_SCRIPT_PATH = path.join(PROJECT_ROOT, 'helpers', 'build-db.js');
+const BUILD_SCRIPT_PATH = path.join(PROJECT_ROOT, 'helpers', 'enricher', 'build-db.js');
 
 function runTest() {
   console.log('🧪 Starting database functionality test...\n');

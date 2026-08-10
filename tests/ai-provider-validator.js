@@ -1,6 +1,6 @@
 const assert = require('assert/strict');
 
-const { validateAIResponse } = require('../helpers/ai-validator');
+const { validateAIResponse } = require('../helpers/ai-engine/ai-validator');
 
 function runTest() {
   const expectedRow = { id: 42 };

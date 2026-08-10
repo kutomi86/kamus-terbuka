@@ -1,6 +1,6 @@
 const assert = require('assert/strict');
 
-const { classifyProviderFailure } = require('../helpers/ai-provider');
+const { classifyProviderFailure } = require('../helpers/ai-engine/ai-provider');
 
 function runTest() {
   assert.equal(

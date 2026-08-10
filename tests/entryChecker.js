@@ -7,7 +7,7 @@ const readline = require('readline');
 const fs = require('fs');
 const path = require('path');
 const Database = require('better-sqlite3');
-const { processPromptWithAI } = require('../helpers/ai-provider');
+const { processPromptWithAI } = require('../helpers/enricher/ai-provider');
 
 const DB_PATH = path.join(__dirname, '..', 'src', 'database', 'kamus-terbuka.db');
 
