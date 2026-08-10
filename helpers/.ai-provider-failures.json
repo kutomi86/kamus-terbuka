@@ -1,76 +1,124 @@
 {
   "providers": {
-    "Deepseek1": {
-      "count": 37,
-      "disabled": false,
-      "disabledUntil": 0,
-      "lastClassification": "transient"
-    },
-    "Gemini": {
-      "count": 36,
-      "disabled": false,
-      "disabledUntil": 0,
-      "lastClassification": "rate-limit"
-    },
-    "Deepseek2": {
-      "count": 37,
-      "disabled": false,
-      "disabledUntil": 0,
-      "lastClassification": "transient"
-    },
-    "Cerebras1": {
-      "count": 36,
-      "disabled": false,
-      "disabledUntil": 0,
-      "lastClassification": "transient"
-    },
-    "Cerebras2": {
-      "count": 36,
-      "disabled": false,
-      "disabledUntil": 0,
-      "lastClassification": "transient"
-    },
-    "Deepseek3": {
-      "count": 37,
-      "disabled": false,
-      "disabledUntil": 0,
-      "lastClassification": "transient"
-    },
-    "Groq1": {
-      "count": 36,
-      "disabled": false,
-      "disabledUntil": 0,
-      "lastClassification": "rate-limit"
-    },
-    "Groq2": {
-      "count": 36,
-      "disabled": false,
-      "disabledUntil": 0,
-      "lastClassification": "rate-limit"
-    },
-    "Openrouter1": {
-      "count": 36,
+    "Mistral4": {
+      "count": 345,
       "disabled": false,
       "disabledUntil": 0,
       "lastClassification": "transient"
     },
     "Openrouter2": {
-      "count": 37,
+      "count": 346,
+      "disabled": false,
+      "disabledUntil": 0,
+      "lastClassification": "transient"
+    },
+    "Mistral5": {
+      "count": 344,
+      "disabled": false,
+      "disabledUntil": 0,
+      "lastClassification": "transient"
+    },
+    "Mistral6": {
+      "count": 346,
       "disabled": false,
       "disabledUntil": 0,
       "lastClassification": "transient"
     },
     "Sambanova1": {
-      "count": 37,
+      "count": 346,
       "disabled": false,
       "disabledUntil": 0,
       "lastClassification": "rate-limit"
     },
     "Sambanova2": {
-      "count": 36,
+      "count": 346,
       "disabled": false,
       "disabledUntil": 0,
       "lastClassification": "rate-limit"
+    },
+    "Openrouter1": {
+      "count": 346,
+      "disabled": false,
+      "disabledUntil": 0,
+      "lastClassification": "transient"
+    },
+    "Cerebras1": {
+      "count": 347,
+      "disabled": false,
+      "disabledUntil": 0,
+      "lastClassification": "transient"
+    },
+    "Cerebras2": {
+      "count": 346,
+      "disabled": false,
+      "disabledUntil": 0,
+      "lastClassification": "transient"
+    },
+    "Deepseek1": {
+      "count": 346,
+      "disabled": false,
+      "disabledUntil": 0,
+      "lastClassification": "transient"
+    },
+    "Deepseek2": {
+      "count": 346,
+      "disabled": false,
+      "disabledUntil": 0,
+      "lastClassification": "transient"
+    },
+    "Deepseek3": {
+      "count": 347,
+      "disabled": false,
+      "disabledUntil": 0,
+      "lastClassification": "transient"
+    },
+    "Groq1": {
+      "count": 342,
+      "disabled": false,
+      "disabledUntil": 0,
+      "lastClassification": "rate-limit"
+    },
+    "Groq2": {
+      "count": 343,
+      "disabled": false,
+      "disabledUntil": 0,
+      "lastClassification": "rate-limit"
+    },
+    "Mistral7": {
+      "count": 2,
+      "disabled": false,
+      "disabledUntil": 0,
+      "lastClassification": "transient"
+    },
+    "Gemini": {
+      "count": 99,
+      "disabled": false,
+      "disabledUntil": 0,
+      "lastClassification": "rate-limit"
+    },
+    "Mistral8": {
+      "count": 1,
+      "disabled": false,
+      "disabledUntil": 0,
+      "lastClassification": "transient"
+    },
+    "Mistral1": {
+      "count": 2,
+      "disabled": false,
+      "disabledUntil": 0,
+      "lastClassification": "transient"
+    },
+    "Mistral10": {
+      "count": 2,
+      "disabled": false,
+      "disabledUntil": 0,
+      "lastClassification": "transient"
+    },
+    "Mistral3": {
+      "count": 1,
+      "disabled": false,
+      "disabledUntil": 0,
+      "lastClassification": "transient"
     }
   },
   "cooldownUntil": 0
