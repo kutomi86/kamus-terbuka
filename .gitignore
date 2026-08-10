@@ -14,6 +14,7 @@ helpers/datasets/Refactor_Plan.md
 # Databases (temporary files)
 src/database/kamus-terbuka.db-shm
 src/database/kamus-terbuka.db-wal
+src/database/kamus-terbuka.db.bak
 
 # OS files
 .DS_Store
