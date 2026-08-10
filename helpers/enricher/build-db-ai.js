@@ -1,16 +1,16 @@
 /**
  * build-db-ai.js - Part 1: Configuration & CLI Commands
- * node helpers/build-db-ai.js
- * node helpers/build-db-ai.js merge
- * node helpers/build-db-ai.js reset
+ * node helpers/enricher/build-db-ai.js
+ * node helpers/enricher/build-db-ai.js merge
+ * node helpers/enricher/build-db-ai.js reset
  */
 require('dotenv').config();
 const path = require('path');
 const Database = require('better-sqlite3');
 const { v4: uuidv4 } = require('uuid');
-const { processBatchWithAI } = require('./ai-provider');
+const { processBatchWithAI } = require('../ai-engine/ai-provider');
 
-const DEFAULT_DB_PATH = path.join(__dirname, '..', 'src', 'database', 'kamus-terbuka.db');
+const DEFAULT_DB_PATH = path.join(__dirname, '..', '..', 'src', 'database', 'kamus-terbuka.db');
 const WORKER_ID = uuidv4().slice(0, 8); // Unique ID for this session
 const STALE_THRESHOLD_MS = 180 * 1000; // 3 minutes
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));

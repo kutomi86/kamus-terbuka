@@ -12,8 +12,8 @@ const Database = require('better-sqlite3');
 const csv = require('csv-parser');
 
 // Path Configuration
-const CSV_PATH = path.join(__dirname, 'datasets', 'kbbi_v6.1.0_full.csv');
-const DB_DIR = path.join(__dirname, '..', 'src', 'database');
+const CSV_PATH = path.join(__dirname, '..', 'datasets', 'kbbi_v6.1.0_full.csv');
+const DB_DIR = path.join(__dirname, '..', '..', 'src', 'database');
 const DB_PATH = path.join(DB_DIR, 'kamus-terbuka.db');
 
 // Batching & Performance Settings

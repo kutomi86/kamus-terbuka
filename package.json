@@ -5,11 +5,11 @@
   "main": "src/index.js",
   "type": "commonjs",
   "scripts": {
-    "build-db": "node helpers/convert-db.js",
-    "build-db-ai": "node helpers/build-db-ai.js",
-    "enricher": "node helpers/enricher.js",
-    "enricher:manager": "node helpers/enricher-manager.js",
-    "entryChecker": "node tests/entryChecker.js"
+    "convert-db": "node helpers/converter/convert-db.js",
+    "build-db-ai": "node helpers/enricher/build-db-ai.js",
+    "enricher": "node helpers/enricher/enricher.js",
+    "enricher:manager": "node helpers/enricher/enricher-manager.js",
+    "checker": "node tests/entryChecker.js"
   },
   "keywords": [
     "indonesian",

@@ -1,5 +1,5 @@
 /**
- * helpers/ai-provider.js - Part 1: Configuration & Prompting
+ * helpers/ai-engine/ai-provider.js - Part 1: Configuration & Prompting
  */
 
 require('dotenv').config();
@@ -7,10 +7,10 @@ const fs = require('fs');
 const path = require('path');
 const { GoogleGenAI } = require('@google/genai');
 const OpenAI = require('openai');
-const { GEMINI_RESPONSE_SCHEMA } = require('./datasets/response-schemas.js');
+const { GEMINI_RESPONSE_SCHEMA } = require('../datasets/response-schemas.js');
 
-// Define the fallback prompt file path (relative to this helper).
-const DEFAULT_PROMPT_PATH = path.join(__dirname, 'datasets', 'system_prompt_all.txt');
+// Define the fallback prompt file path (relative to the helpers folder).
+const DEFAULT_PROMPT_PATH = path.join(__dirname, '..', 'datasets', 'system_prompt_all.txt');
 
 let cachedDefaultPrompt = null;
 
@@ -253,7 +253,7 @@ if (providers.length > 0) {
 let currentProviderIndex = 0;
 
 /**
- * helpers/ai-provider.js - Part 3: Logic & Communication
+ * helpers/ai-engine/ai-provider.js - Part 3: Logic & Communication
  */
 
 /**
@@ -510,7 +510,7 @@ module.exports = {
   classifyProviderFailure,
 };
 
-// Standalone execution test: node helpers/ai-provider.js
+// Standalone execution test: node helpers/ai-engine/ai-provider.js
 if (require.main === module) {
   (async () => {
     console.log('🧪 Testing ai-provider.js with sample lexical data...');

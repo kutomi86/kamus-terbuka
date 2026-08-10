@@ -1,10 +1,10 @@
 /**
- * helpers/enricher-manager.js
+ * helpers/enricher/enricher-manager.js
  *
  * Usage:
- *   node helpers/enricher-manager.js [workerCount]
- *   node helpers/enricher-manager.js 8 --restart
- *   node helpers/enricher-manager.js --workers=8 --restart
+ *   node helpers/enricher/enricher-manager.js [workerCount]
+ *   node helpers/enricher/enricher-manager.js 8 --restart
+ *   node helpers/enricher/enricher-manager.js --workers=8 --restart
  */
 
 require('dotenv').config();
