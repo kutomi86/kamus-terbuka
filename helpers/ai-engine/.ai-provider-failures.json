@@ -43,31 +43,31 @@
       "lastClassification": "transient"
     },
     "Cerebras1": {
-      "count": 347,
+      "count": 349,
       "disabled": false,
       "disabledUntil": 0,
       "lastClassification": "transient"
     },
     "Cerebras2": {
-      "count": 346,
+      "count": 348,
       "disabled": false,
       "disabledUntil": 0,
       "lastClassification": "transient"
     },
     "Deepseek1": {
-      "count": 346,
+      "count": 348,
       "disabled": false,
       "disabledUntil": 0,
       "lastClassification": "transient"
     },
     "Deepseek2": {
-      "count": 346,
+      "count": 348,
       "disabled": false,
       "disabledUntil": 0,
       "lastClassification": "transient"
     },
     "Deepseek3": {
-      "count": 347,
+      "count": 349,
       "disabled": false,
       "disabledUntil": 0,
       "lastClassification": "transient"
@@ -91,7 +91,7 @@
       "lastClassification": "transient"
     },
     "Gemini": {
-      "count": 99,
+      "count": 101,
       "disabled": false,
       "disabledUntil": 0,
       "lastClassification": "rate-limit"

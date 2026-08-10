@@ -9,6 +9,9 @@
     "build-db-ai": "node helpers/enricher/build-db-ai.js",
     "enricher": "node helpers/enricher/enricher.js",
     "enricher:manager": "node helpers/enricher/enricher-manager.js",
+    "relationbuilder": "node helpers/enricher/relation-builder.js",
+    "upserter": "node helpers/enricher/upserter.js",
+    "upserter:manager": "node helpers/enricher/upserter-manager.js",
     "checker": "node tests/entryChecker.js"
   },
   "keywords": [
