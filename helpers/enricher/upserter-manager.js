@@ -58,13 +58,16 @@ function startWorker(index, restartFailed, state) {
   });
 
   const prefix = `[slang-worker ${index + 1}/${state.workerCount}]`;
+  const newLiner = (chunk) => chunk.includes('Claimed')
+    ? `\n${prefix} ${chunk.slice(1)}`
+    : `${prefix} ${chunk}`;
 
   child.stdout.on('data', (chunk) => {
-    process.stdout.write(`${prefix} ${chunk}`);
+    process.stdout.write(newLiner(chunk));
   });
 
   child.stderr.on('data', (chunk) => {
-    process.stderr.write(`${prefix} ${chunk}`);
+    process.stderr.write(newLiner(chunk));
   });
 
   child.on('exit', (code, signal) => {

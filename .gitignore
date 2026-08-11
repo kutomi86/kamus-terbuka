@@ -6,15 +6,16 @@
 # Node modules
 node_modules/
 
-# Datasets (huge files that are originated from the credited KBBI dataset, or other sources such as project plans)
+# Datasets (huge files that are originated from the credited KBBI dataset, or other sources that doesn't need to be included (i.e. temporary files))
 helpers/datasets/kbbi_v6.1.0_full.csv
-helpers/datasets/Project_Roadmap.md
-helpers/datasets/Refactor_Plan.md
 
 # Databases (temporary files)
 src/database/kamus-terbuka.db-shm
 src/database/kamus-terbuka.db-wal
 src/database/kamus-terbuka.db.bak
+
+# Databases (primary, but too large to be included in the repository for each commit)
+src/database/kamus-terbuka.db
 
 # OS files
 .DS_Store

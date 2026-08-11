@@ -1,79 +1,42 @@
-const Database = require('better-sqlite3');
+/**
+ * random.js
+ * Migration script to add 'peribahasa_terkait' column safely.
+ */
+
 const path = require('path');
+const Database = require('better-sqlite3');
 
-// Use path.join to resolve relative to this script directory
-const db = new Database(path.join(__dirname, '../src/database/kamus-terbuka.db'));
+const DB_PATH = path.join(__dirname, '..', 'src', 'database', 'kamus-terbuka.db');
 
-// Run everything in a single transaction for safety and speed
-const reorderDatabase = db.transaction(() => {
-    console.log("Renaming old table...");
-    db.prepare(`ALTER TABLE entries RENAME TO entries_old`).run();
+console.log(`🚀 Starting migration on: ${DB_PATH}`);
 
-    console.log("Creating new table schema (excluding ai_processed and worker_id)...");
-    db.prepare(`
-        CREATE TABLE entries (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            kata TEXT NOT NULL,
-            lema TEXT,
-            pelafalan TEXT,
-            etimologi TEXT,
-            makna TEXT,
-            tags_kelas TEXT,
-            tags_bahasa TEXT,
-            tags_bidang TEXT,
-            tags_ragam TEXT,
-            tags_sumber TEXT NOT NULL,
-            contoh TEXT,
-            turunan TEXT,
-            gabungan_kata TEXT,
-            peribahasa TEXT,
-            kiasan TEXT,
-            varian TEXT,
-            dasar TEXT,
-            jenis_entri TEXT,
-            enriched INTEGER DEFAULT 0,
-            enriched_worker_id TEXT,
-            enriched_claim_expires_at INTEGER,
-            enriched_at INTEGER
-        )
-    `).run();
+const db = new Database(DB_PATH, { verbose: console.log });
 
-    console.log("Inserting sorted data... This might take a moment.");
-    db.prepare(`
-        INSERT INTO entries (
-            kata, lema, pelafalan, etimologi, makna, tags_kelas, 
-            tags_bahasa, tags_bidang, tags_ragam, tags_sumber, 
-            contoh, turunan, gabungan_kata, peribahasa, kiasan, 
-            varian, dasar, jenis_entri, enriched, 
-            enriched_worker_id, enriched_claim_expires_at, enriched_at
-        )
-        SELECT 
-            kata, lema, pelafalan, etimologi, makna, tags_kelas, 
-            tags_bahasa, tags_bidang, tags_ragam, tags_sumber, 
-            contoh, turunan, gabungan_kata, peribahasa, kiasan, 
-            varian, dasar, jenis_entri, enriched, 
-            enriched_worker_id, enriched_claim_expires_at, enriched_at
-        FROM entries_old 
-        ORDER BY kata ASC
-    `).run();
-
-    console.log("Cleaning up...");
-    db.prepare(`DROP TABLE entries_old`).run();
-
-    console.log("Recreating indexes...");
-    db.prepare(`CREATE INDEX IF NOT EXISTS idx_kata ON entries(kata)`).run();
-    db.prepare(`CREATE INDEX IF NOT EXISTS idx_lema ON entries(lema)`).run();
-    db.prepare(`CREATE INDEX IF NOT EXISTS idx_entries_enriched ON entries(enriched, enriched_worker_id)`).run();
-    
-    // Optional: Reset the sequence counter to match the new count
-    db.prepare(`UPDATE sqlite_sequence SET seq = (SELECT MAX(id) FROM entries) WHERE name = 'entries'`).run();
-
-    console.log("Success! Table reordered and columns excluded.");
-});
-
-// Execute the transaction
 try {
-    reorderDatabase();
+    // 1. Get current columns
+    const columns = db.prepare('PRAGMA table_info(entries)').all().map(c => c.name);
+
+    // 2. Add the column if it doesn't exist
+    if (!columns.includes('peribahasa_terkait')) {
+        console.log('➕ Adding column: peribahasa_terkait');
+        db.prepare('ALTER TABLE entries ADD COLUMN peribahasa_terkait TEXT').run();
+        console.log('✅ Column added successfully.');
+    } else {
+        console.log('ℹ️ Column "peribahasa_terkait" already exists. Skipping.');
+    }
+
+    // 3. Optional: Add an index for performance if you plan to search this column often
+    console.log('🔍 Creating index for peribahasa_terkait...');
+    db.prepare('CREATE INDEX IF NOT EXISTS idx_entries_peribahasa_terkait ON entries(peribahasa_terkait)').run();
+
+    // 4. Merge WAL and cleanup
+    console.log('🧹 Finalizing: Merging WAL file...');
+    db.pragma('wal_checkpoint(TRUNCATE)');
+    
+    console.log('🏁 Migration complete.');
+
 } catch (err) {
-    console.error("Transaction failed! Database remains unchanged.", err);
+    console.error('💥 Migration failed:', err.message);
+} finally {
+    db.close();
 }

@@ -1,121 +1,91 @@
 {
   "providers": {
     "Mistral4": {
-      "count": 345,
-      "disabled": false,
-      "disabledUntil": 0,
-      "lastClassification": "transient"
-    },
-    "Openrouter2": {
-      "count": 346,
-      "disabled": false,
-      "disabledUntil": 0,
-      "lastClassification": "transient"
-    },
-    "Mistral5": {
-      "count": 344,
-      "disabled": false,
-      "disabledUntil": 0,
-      "lastClassification": "transient"
-    },
-    "Mistral6": {
-      "count": 346,
-      "disabled": false,
-      "disabledUntil": 0,
-      "lastClassification": "transient"
-    },
-    "Sambanova1": {
-      "count": 346,
-      "disabled": false,
-      "disabledUntil": 0,
-      "lastClassification": "rate-limit"
-    },
-    "Sambanova2": {
-      "count": 346,
-      "disabled": false,
-      "disabledUntil": 0,
-      "lastClassification": "rate-limit"
-    },
-    "Openrouter1": {
-      "count": 346,
-      "disabled": false,
-      "disabledUntil": 0,
-      "lastClassification": "transient"
-    },
-    "Cerebras1": {
-      "count": 349,
+      "count": 405,
       "disabled": false,
       "disabledUntil": 0,
       "lastClassification": "transient"
     },
     "Cerebras2": {
-      "count": 348,
-      "disabled": false,
-      "disabledUntil": 0,
-      "lastClassification": "transient"
-    },
-    "Deepseek1": {
-      "count": 348,
-      "disabled": false,
-      "disabledUntil": 0,
-      "lastClassification": "transient"
-    },
-    "Deepseek2": {
-      "count": 348,
-      "disabled": false,
-      "disabledUntil": 0,
-      "lastClassification": "transient"
-    },
-    "Deepseek3": {
-      "count": 349,
+      "count": 403,
       "disabled": false,
       "disabledUntil": 0,
       "lastClassification": "transient"
     },
     "Groq1": {
-      "count": 342,
+      "count": 399,
       "disabled": false,
       "disabledUntil": 0,
       "lastClassification": "rate-limit"
+    },
+    "Mistral5": {
+      "count": 405,
+      "disabled": false,
+      "disabledUntil": 0,
+      "lastClassification": "transient"
     },
     "Groq2": {
-      "count": 343,
+      "count": 400,
       "disabled": false,
       "disabledUntil": 0,
       "lastClassification": "rate-limit"
     },
-    "Mistral7": {
-      "count": 2,
+    "Mistral6": {
+      "count": 405,
       "disabled": false,
       "disabledUntil": 0,
       "lastClassification": "transient"
+    },
+    "Deepseek1": {
+      "count": 403,
+      "disabled": false,
+      "disabledUntil": 0,
+      "lastClassification": "transient"
+    },
+    "Deepseek2": {
+      "count": 403,
+      "disabled": false,
+      "disabledUntil": 0,
+      "lastClassification": "transient"
+    },
+    "Deepseek3": {
+      "count": 403,
+      "disabled": false,
+      "disabledUntil": 0,
+      "lastClassification": "transient"
+    },
+    "Openrouter1": {
+      "count": 405,
+      "disabled": false,
+      "disabledUntil": 0,
+      "lastClassification": "transient"
+    },
+    "Openrouter2": {
+      "count": 405,
+      "disabled": false,
+      "disabledUntil": 0,
+      "lastClassification": "transient"
+    },
+    "Sambanova1": {
+      "count": 403,
+      "disabled": false,
+      "disabledUntil": 0,
+      "lastClassification": "rate-limit"
+    },
+    "Sambanova2": {
+      "count": 402,
+      "disabled": false,
+      "disabledUntil": 0,
+      "lastClassification": "rate-limit"
     },
     "Gemini": {
-      "count": 101,
+      "count": 402,
       "disabled": false,
       "disabledUntil": 0,
       "lastClassification": "rate-limit"
     },
-    "Mistral8": {
-      "count": 1,
-      "disabled": false,
-      "disabledUntil": 0,
-      "lastClassification": "transient"
-    },
-    "Mistral1": {
-      "count": 2,
-      "disabled": false,
-      "disabledUntil": 0,
-      "lastClassification": "transient"
-    },
-    "Mistral10": {
-      "count": 2,
-      "disabled": false,
-      "disabledUntil": 0,
-      "lastClassification": "transient"
-    },
-    "Mistral3": {
-      "count": 1,
+    "Cerebras1": {
+      "count": 402,
       "disabled": false,
       "disabledUntil": 0,
       "lastClassification": "transient"

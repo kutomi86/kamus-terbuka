@@ -86,7 +86,7 @@ function ensureSchema(db) {
                     ? ' INTEGER'
                     : column === 'enriched_at'
                         ? ' INTEGER'
-                    : ' TEXT';
+                        : ' TEXT';
             db.prepare(`ALTER TABLE entries ADD COLUMN ${column}${definition}`).run();
         }
     }
@@ -467,8 +467,8 @@ async function runValidationDryRun(db, dbPath) {
     console.log(`🧪 Validation dry-run selected random entry id=${sampleRow.id} (${sampleRow.kata})`);
 
     const results = await processBatchWithAI([sampleRow], {
-      promptPath: PROMPT_PATH,
-      responseSchema: ENRICHER_RESPONSE_SCHEMA,
+        promptPath: PROMPT_PATH,
+        responseSchema: ENRICHER_RESPONSE_SCHEMA,
     });
 
     const [validatedEntry] = validateAIResponse(results, [sampleRow], {

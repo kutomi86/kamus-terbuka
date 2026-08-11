@@ -268,6 +268,8 @@ async function runUpserter(db, dbPath) {
     const { updateHeartbeat, removeHeartbeat } = makeHeartbeat(db);
 
     let processed = 0;
+    let processedSinceLastCheckpoint = 0;
+    const CHECKPOINT_THRESHOLD = 75; // Trigger checkpoint every 15 batches (assuming BATCH_SIZE 5)
     let shutdownRequested = false;
 
     const requestShutdown = (signal) => {
@@ -278,9 +280,14 @@ async function runUpserter(db, dbPath) {
 
     const finalize = (reason) => {
         try {
+            // Release any rows this worker currently has locked (upserted = 2)
             db.prepare('UPDATE entries SET upserted = 0, upserted_worker_id = NULL, upserted_claim_expires_at = NULL WHERE upserted = 2 AND upserted_worker_id = ?').run(WORKER_ID);
-            removeHeartbeat();
+            
+            // Final attempt to merge WAL before closing
+            console.log(`🧹 [${WORKER_ID}] Finalizing: Merging WAL...`);
             db.pragma('wal_checkpoint(PASSIVE)');
+            
+            removeHeartbeat();
         } catch (err) {
             console.warn(`⚠️ [${WORKER_ID}] Finalization warning: ${err.message}`);
         }
@@ -299,6 +306,7 @@ async function runUpserter(db, dbPath) {
 
     console.log(`🐝 Slang Upserter [${WORKER_ID}] started on ${dbPath}`);
     console.log(`📦 Batch size: ${BATCH_SIZE}`);
+    console.log(`🧼 Checkpoint threshold: ${CHECKPOINT_THRESHOLD} entries`);
 
     await retrySqliteOperation(() => updateHeartbeat(), 'worker heartbeat update');
 
@@ -309,6 +317,8 @@ async function runUpserter(db, dbPath) {
         const excludedIds = new Set();
         let continueAfterBatch = false;
 
+        // Note: The 'finally' block from the previous version has been removed 
+        // to handle checkpointing manually via the threshold counter.
         try {
             while (!shutdownRequested && batchSuccesses < BATCH_SIZE) {
                 const remainingSuccesses = BATCH_SIZE - batchSuccesses;
@@ -323,7 +333,6 @@ async function runUpserter(db, dbPath) {
 
                 console.log(`\n💎 [${WORKER_ID}] Claimed ${claimedRows.length} row(s) for slang classification.`);
 
-                // Call the AI in batch for all claimed rows
                 try {
                     // Refresh leases for all claimed rows
                     for (const row of claimedRows) {
@@ -343,7 +352,6 @@ async function runUpserter(db, dbPath) {
                         requiredFields: ['id', 'bahasa_gaul'],
                     });
 
-                    // Create a lookup map for faster processing
                     const resultsMap = new Map(validated.map(item => [item.id, item]));
 
                     for (const row of claimedRows) {
@@ -364,9 +372,33 @@ async function runUpserter(db, dbPath) {
 
                         processed += 1;
                         batchSuccesses += 1;
+                        processedSinceLastCheckpoint += 1;
+
+                        // Check if it is time to perform a WAL checkpoint
+                        if (processedSinceLastCheckpoint >= CHECKPOINT_THRESHOLD) {
+                            console.log(`   🧹 [${WORKER_ID}] Threshold reached (${processedSinceLastCheckpoint} entries). Performing WAL checkpoint...`);
+                            await retrySqliteOperation(
+                                () => db.pragma('wal_checkpoint(PASSIVE)'),
+                                'periodic WAL checkpoint'
+                            );
+                            processedSinceLastCheckpoint = 0;
+                            console.log(`   ✅ [${WORKER_ID}] WAL checkpoint successful.`);
+                        }
                     }
 
-                    console.log(`   ✅ Successfully classified ${claimedRows.length} entries.`);
+                    // Logging the successfully processed entries
+
+                    const claimedEntries = claimedRows.map(row => `   🆔 ${row.id} - ${row.kata}`);
+
+                    const successLogs = [
+                        `✅ Successfully classified ${claimedRows.length} entries.`,
+                        ...claimedEntries,
+                        `🧾 Total processed so far: ${processed} entries, ${Math.ceil(processed / BATCH_SIZE)} batches.`
+                    ];
+                    let emptySpace = "                   ";
+
+                    console.log(`${successLogs.map((str, i) => i == 0 ? str : `${emptySpace}${str}`).join("\n")}`);
+
                     await retrySqliteOperation(() => updateHeartbeat(), 'worker heartbeat update');
 
                 } catch (err) {
@@ -388,7 +420,7 @@ async function runUpserter(db, dbPath) {
             }
 
             if (batchSuccesses > 0) {
-                console.log(`✅ [${WORKER_ID}] Batch completed with ${batchSuccesses} classification(s).`);
+                console.log(`✅ [${WORKER_ID}] Batch cycle completed.`);
             } else if (excludedIds.size > 0) {
                 console.log(`↩️ [${WORKER_ID}] Retrying failed rows in the next cycle.`);
             } else {
@@ -397,12 +429,10 @@ async function runUpserter(db, dbPath) {
 
             await retrySqliteOperation(() => updateHeartbeat(), 'worker heartbeat update');
             continueAfterBatch = batchSuccesses > 0 || excludedIds.size > 0;
-        } finally {
-            await retrySqliteOperation(() => db.pragma('wal_checkpoint(PASSIVE)'), 'WAL checkpoint');
-        }
-
-        if (!continueAfterBatch) {
-            break;
+        } catch (loopErr) {
+            console.error(`   ❌ [${WORKER_ID}] Loop error: ${loopErr.message}`);
+            // Small sleep to prevent infinite rapid loops on error
+            await sleep(1000);
         }
     }
 
@@ -463,13 +493,13 @@ async function main() {
             console.error(`⏳ Please wait ${lock.timeStr} after stopping all workers before retrying.`);
             db.close();
             process.exit(1);
+        } else {
+            console.log('🧹 Maintenance: Merging WAL and shrinking database...');
+            db.pragma('wal_checkpoint(TRUNCATE)');
+            db.close();
+            console.log('✅ Merge complete.');
+            return;
         }
-
-        console.log('🧹 Maintenance: Merging WAL and shrinking database...');
-        db.pragma('wal_checkpoint(TRUNCATE)');
-        db.close();
-        console.log('✅ Merge complete.');
-        return;
     }
 
     if (command === 'reset') {
