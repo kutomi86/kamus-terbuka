@@ -1,91 +1,121 @@
 {
   "providers": {
-    "Mistral4": {
-      "count": 405,
-      "disabled": false,
-      "disabledUntil": 0,
-      "lastClassification": "transient"
-    },
-    "Cerebras2": {
-      "count": 403,
-      "disabled": false,
-      "disabledUntil": 0,
-      "lastClassification": "transient"
-    },
-    "Groq1": {
-      "count": 399,
-      "disabled": false,
-      "disabledUntil": 0,
-      "lastClassification": "rate-limit"
-    },
     "Mistral5": {
-      "count": 405,
-      "disabled": false,
-      "disabledUntil": 0,
-      "lastClassification": "transient"
-    },
-    "Groq2": {
-      "count": 400,
-      "disabled": false,
-      "disabledUntil": 0,
-      "lastClassification": "rate-limit"
-    },
-    "Mistral6": {
-      "count": 405,
-      "disabled": false,
-      "disabledUntil": 0,
-      "lastClassification": "transient"
-    },
-    "Deepseek1": {
-      "count": 403,
+      "count": 1095,
       "disabled": false,
       "disabledUntil": 0,
       "lastClassification": "transient"
     },
     "Deepseek2": {
-      "count": 403,
+      "count": 1096,
+      "disabled": false,
+      "disabledUntil": 0,
+      "lastClassification": "transient"
+    },
+    "Mistral6": {
+      "count": 1095,
       "disabled": false,
       "disabledUntil": 0,
       "lastClassification": "transient"
     },
     "Deepseek3": {
-      "count": 403,
+      "count": 1096,
+      "disabled": false,
+      "disabledUntil": 0,
+      "lastClassification": "transient"
+    },
+    "Groq1": {
+      "count": 1080,
+      "disabled": false,
+      "disabledUntil": 0,
+      "lastClassification": "rate-limit"
+    },
+    "Groq2": {
+      "count": 1080,
+      "disabled": false,
+      "disabledUntil": 0,
+      "lastClassification": "rate-limit"
+    },
+    "Mistral4": {
+      "count": 1093,
       "disabled": false,
       "disabledUntil": 0,
       "lastClassification": "transient"
     },
     "Openrouter1": {
-      "count": 405,
+      "count": 1095,
       "disabled": false,
       "disabledUntil": 0,
       "lastClassification": "transient"
     },
     "Openrouter2": {
-      "count": 405,
+      "count": 1095,
       "disabled": false,
       "disabledUntil": 0,
       "lastClassification": "transient"
     },
     "Sambanova1": {
-      "count": 403,
+      "count": 1095,
       "disabled": false,
       "disabledUntil": 0,
       "lastClassification": "rate-limit"
     },
     "Sambanova2": {
-      "count": 402,
+      "count": 1095,
       "disabled": false,
       "disabledUntil": 0,
       "lastClassification": "rate-limit"
     },
     "Gemini": {
-      "count": 402,
+      "count": 1095,
       "disabled": false,
       "disabledUntil": 0,
       "lastClassification": "rate-limit"
     },
     "Cerebras1": {
-      "count": 402,
+      "count": 1095,
+      "disabled": false,
+      "disabledUntil": 0,
+      "lastClassification": "transient"
+    },
+    "Cerebras2": {
+      "count": 1095,
+      "disabled": false,
+      "disabledUntil": 0,
+      "lastClassification": "transient"
+    },
+    "Deepseek1": {
+      "count": 1095,
+      "disabled": false,
+      "disabledUntil": 0,
+      "lastClassification": "transient"
+    },
+    "Mistral7": {
+      "count": 1,
+      "disabled": false,
+      "disabledUntil": 0,
+      "lastClassification": "transient"
+    },
+    "Mistral1": {
+      "count": 2,
+      "disabled": false,
+      "disabledUntil": 0,
+      "lastClassification": "transient"
+    },
+    "Mistral10": {
+      "count": 1,
+      "disabled": false,
+      "disabledUntil": 0,
+      "lastClassification": "transient"
+    },
+    "Mistral2": {
+      "count": 1,
+      "disabled": false,
+      "disabledUntil": 0,
+      "lastClassification": "transient"
+    },
+    "Mistral9": {
+      "count": 1,
       "disabled": false,
       "disabledUntil": 0,
       "lastClassification": "transient"

@@ -30,7 +30,7 @@ Two parallel efforts:
 - **Abbreviation Expansion Cleanup** — Status: ✅ Completed
 > Some entries still contain unexpanded abbreviations left over from earlier relationship building. Add a focused cleanup pass that scans `makna`, `contoh`, `peribahasa`, `terkait` (excluding anything already covered by `turunan`/`gabungan_kata`), `peribahasa`, `peribahasa_terkait`, and `kata` itself (for entries with the `jenis_entri` of `peribahasa`) to find and expand abbreviations, using an external, reusable abbreviation map that also tracks how many times each abbreviation was found and expanded.
 
-- **Slang Marker** — Status: 🟡 Ongoing
+- **Slang Marker** — Status: ✅ Completed
 > Add a new `bahasa_gaul` boolean property (`0` or `1`) to every entry, using AI to identify which entries are slang.
 
 ---
